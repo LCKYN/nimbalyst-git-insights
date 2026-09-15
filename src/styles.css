@@ -1,0 +1,193 @@
+.git-insights-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: var(--nim-text);
+  background: var(--nim-bg);
+  container-type: inline-size;
+}
+
+.git-insights-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--nim-border);
+}
+
+.git-insights-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.git-insights-tab {
+  background: transparent;
+  border: none;
+  color: var(--nim-text-faint);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.git-insights-tab--active {
+  background: var(--nim-bg-hover);
+  color: var(--nim-text);
+}
+
+.git-insights-content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+.git-insights-loading,
+.git-insights-empty,
+.git-insights-muted {
+  color: var(--nim-text-faint);
+  font-size: 12px;
+}
+
+.git-insights-error {
+  color: var(--nim-danger, #f87171);
+  font-size: 12px;
+}
+
+.git-insights-heatmap {
+  overflow-x: auto;
+}
+
+.git-insights-distribution-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.git-insights-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--nim-text-faint);
+}
+
+.git-insights-granularity-toggle {
+  display: flex;
+  gap: 2px;
+}
+
+.git-insights-granularity-button {
+  background: transparent;
+  border: 1px solid var(--nim-border);
+  color: var(--nim-text-faint);
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.git-insights-granularity-button--active {
+  background: var(--nim-primary);
+  color: var(--nim-bg);
+  border-color: var(--nim-primary);
+}
+
+.git-insights-author-list {
+  margin-top: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.git-insights-author-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--nim-border);
+}
+
+.git-insights-uncommitted-list {
+  padding: 0;
+  list-style: none;
+}
+
+.git-insights-uncommitted-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--nim-border);
+}
+
+.git-insights-uncommitted-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.git-insights-uncommitted-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.git-insights-uncommitted-status--modified {
+  background: var(--nim-warning, #fbbf24);
+  color: var(--nim-bg);
+}
+
+.git-insights-uncommitted-status--untracked {
+  background: var(--nim-success, #4ade80);
+  color: var(--nim-bg);
+}
+
+.git-insights-uncommitted-sessions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.git-insights-session-chip {
+  background: var(--nim-bg-hover);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.git-insights-pr-create-button {
+  background: var(--nim-primary);
+  color: var(--nim-bg);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.git-insights-pr-create-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.git-insights-pr-create--error,
+.git-insights-pr-create-error {
+  color: var(--nim-danger, #f87171);
+  font-size: 11px;
+}
+
+@container (max-width: 480px) {
+  .git-insights-distribution-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
