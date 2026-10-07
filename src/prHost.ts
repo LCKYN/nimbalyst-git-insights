@@ -36,7 +36,8 @@ function run(cmd: string, args: string[], cwd: string): Promise<RunResult> {
     const child = spawn(cmd, args, {
       cwd,
       shell: false,
-      env: { ...process.env, PATH: enhancedPath() },
+      // No TTY here: fail fast instead of hanging on a credential prompt.
+      env: { ...process.env, PATH: enhancedPath(), GIT_TERMINAL_PROMPT: '0' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -96,9 +97,29 @@ export async function createPullRequest(host: 'github' | 'gitlab', cwd: string):
     throw new Error(`${cmd} is not authenticated. Run "${cmd} auth login" and try again.`);
   }
 
-  const args = host === 'github' ? ['pr', 'create', '--fill'] : ['mr', 'create', '--fill'];
+  // Never push the base branch itself; the PR would be rejected anyway, after the push.
+  const branch = (await run('git', ['branch', '--show-current'], cwd)).stdout.trim();
+  if (!branch) throw new Error('HEAD is detached. Check out a branch first.');
+  const originHead = (await run('git', ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], cwd)).stdout.trim();
+  const base = originHead.replace(/^origin\//, '');
+  if (base ? branch === base : branch === 'main' || branch === 'master') {
+    throw new Error(`You're on ${branch}, the default branch. Switch to a feature branch to open a ${host === 'github' ? 'PR' : 'MR'}.`);
+  }
+
+  // gh/glab can't ask "where should we push?" without a TTY, so push first.
+  const upstream = await run('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], cwd);
+  const push = await run('git', upstream.code === 0 ? ['push'] : ['push', '-u', 'origin', 'HEAD'], cwd);
+  if (push.code !== 0) {
+    throw new Error(`git push failed: ${push.stderr.trim() || push.stdout.trim()}`);
+  }
+
+  const args = host === 'github' ? ['pr', 'create', '--fill'] : ['mr', 'create', '--fill', '--yes'];
   const res = await run(cmd, args, cwd);
   if (res.code !== 0) {
+    // Both CLIs print the existing PR/MR's URL in the "already exists" error.
+    const output = `${res.stdout}\n${res.stderr}`;
+    const existing = /already exists/i.test(output) ? extractUrl(output) : null;
+    if (existing) return { url: existing };
     throw new Error(res.stderr.trim() || res.stdout.trim() || `${cmd} ${args.join(' ')} failed.`);
   }
   const url = extractUrl(res.stdout) ?? extractUrl(res.stderr);

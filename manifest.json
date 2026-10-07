@@ -27,7 +27,7 @@
         "id": "git-insights-runtime",
         "entry": "dist/backend.js",
         "runtime": "utility-process",
-        "permissions": [],
+        "permissions": ["mcp-server-register"],
         "enablement": {
           "default": "disabled",
           "promptOn": "firstUse",

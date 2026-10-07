@@ -11,7 +11,7 @@ interface CliStatusResult {
 type CreateState = 'idle' | 'creating' | 'error';
 
 /** One-click PR/MR creation: detects the host, checks gh/glab, creates, opens the URL. */
-export function PrCreateButton({ workspacePath }: { workspacePath: string }) {
+export function PrCreateButton({ workspacePath, branch }: { workspacePath: string; branch?: string }) {
   const [status, setStatus] = useState<CliStatusResult | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [createState, setCreateState] = useState<CreateState>('idle');
@@ -65,7 +65,8 @@ export function PrCreateButton({ workspacePath }: { workspacePath: string }) {
       <button
         type="button"
         className="git-insights-pr-create-button"
-        disabled={createState === 'creating'}
+        disabled={createState === 'creating' || branch === ''}
+        title={branch === '' ? 'Check out a branch first (HEAD is detached).' : `Push ${branch ?? 'this branch'} and open a ${label.toLowerCase()}`}
         onClick={handleCreate}
       >
         {createState === 'creating' ? `Creating ${label}…` : `Create ${label}`}

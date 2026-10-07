@@ -9,6 +9,17 @@ export interface HeatmapDay {
   /** YYYY-MM-DD, in the commit's own recorded offset (see `parseAuthorDateDay`). */
   date: string;
   count: number;
+  /** Authors who committed that day, most commits first. */
+  authors: AuthorCount[];
+}
+
+export interface CommitSummary {
+  total: number;
+  days: HeatmapDay[];
+  /** Commit counts by weekday, index 0 = Sunday. */
+  weekdays: number[];
+  /** Commit counts by hour of day (0-23), in each commit's own recorded offset. */
+  hours: number[];
 }
 
 export type DistributionGranularity = 'day' | 'week' | 'month';
@@ -48,16 +59,52 @@ export function parseAuthorDateDay(authorDate: string): string {
   return authorDate.slice(0, 10);
 }
 
-export function aggregateHeatmap(commits: readonly RawCommit[]): HeatmapDay[] {
-  const counts = new Map<string, number>();
+/** YYYY-MM-DD of a `Date` in the local timezone (`toISOString` would give the UTC day). */
+export function localDateKey(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function sortedCounts(counts: Map<string, number>): AuthorCount[] {
+  return [...counts.entries()]
+    .map(([author, count]) => ({ author, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+export function aggregateSummary(commits: readonly RawCommit[], options: { since?: string } = {}): CommitSummary {
+  const days = new Map<string, Map<string, number>>();
+  const weekdays = new Array<number>(7).fill(0);
+  const hours = new Array<number>(24).fill(0);
+  let total = 0;
+
   for (const commit of commits) {
     const day = parseAuthorDateDay(commit.authorDate);
     if (!day) continue;
-    counts.set(day, (counts.get(day) ?? 0) + 1);
+    if (options.since && day < options.since) continue;
+    total++;
+
+    const authors = days.get(day) ?? new Map<string, number>();
+    const author = commit.author.trim() || 'Unknown';
+    authors.set(author, (authors.get(author) ?? 0) + 1);
+    days.set(day, authors);
+
+    const [year, month, date] = day.split('-').map(Number);
+    weekdays[new Date(Date.UTC(year, month - 1, date)).getUTCDay()]++;
+    const hour = Number(commit.authorDate.slice(11, 13));
+    if (hour >= 0 && hour < 24) hours[hour]++;
   }
-  return [...counts.entries()]
-    .map(([date, count]) => ({ date, count }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    total,
+    days: [...days.entries()]
+      .map(([date, authors]) => {
+        const sorted = sortedCounts(authors);
+        return { date, count: sorted.reduce((sum, a) => sum + a.count, 0), authors: sorted };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    weekdays,
+    hours,
+  };
 }
 
 function isoWeekBucket(day: string): string {
@@ -86,12 +133,16 @@ export function aggregateDistribution(
   const granularity = options.granularity ?? 'day';
   const bucketCounts = new Map<string, number>();
   const authorCounts = new Map<string, number>();
+  let first = '';
+  let last = '';
 
   for (const commit of commits) {
     const day = parseAuthorDateDay(commit.authorDate);
     if (!day) continue;
     if (options.since && day < options.since) continue;
     if (options.until && day > options.until) continue;
+    if (!first || day < first) first = day;
+    if (day > last) last = day;
 
     const key = bucketKey(day, granularity);
     bucketCounts.set(key, (bucketCounts.get(key) ?? 0) + 1);
@@ -100,12 +151,21 @@ export function aggregateDistribution(
     authorCounts.set(author, (authorCounts.get(author) ?? 0) + 1);
   }
 
+  if (!first) return { buckets: [], authors: [] };
+
+  // Zero-fill from `since` (or the first commit) to `until` (or the last commit),
+  // so a quiet stretch shows up as a gap instead of adjacent bars.
+  const buckets = new Map<string, number>();
+  const end = options.until ?? last;
+  const cursor = new Date(`${options.since ?? first}T00:00:00Z`);
+  for (let day = cursor.toISOString().slice(0, 10); day <= end; day = cursor.toISOString().slice(0, 10)) {
+    const key = bucketKey(day, granularity);
+    buckets.set(key, bucketCounts.get(key) ?? 0);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
   return {
-    buckets: [...bucketCounts.entries()]
-      .map(([bucket, count]) => ({ bucket, count }))
-      .sort((a, b) => a.bucket.localeCompare(b.bucket)),
-    authors: [...authorCounts.entries()]
-      .map(([author, count]) => ({ author, count }))
-      .sort((a, b) => b.count - a.count),
+    buckets: [...buckets.entries()].map(([bucket, count]) => ({ bucket, count })),
+    authors: sortedCounts(authorCounts),
   };
 }

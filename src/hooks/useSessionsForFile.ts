@@ -49,6 +49,25 @@ interface SessionListEntry {
   updatedAt?: number;
 }
 
+// Every file row needs the same session list; share one fetch across rows.
+// ponytail: 5s TTL, invalidate on an event instead if titles look stale.
+let sessionsCache: { workspacePath: string; at: number; promise: Promise<SessionListEntry[]> } | null = null;
+
+function listSessions(workspacePath: string): Promise<SessionListEntry[]> {
+  if (sessionsCache?.workspacePath === workspacePath && Date.now() - sessionsCache.at < 5000) {
+    return sessionsCache.promise;
+  }
+  const promise = ipc.invoke('sessions:list', workspacePath, { includeArchived: true })
+    .then(r => {
+      const wrapped = r as { success?: boolean; sessions?: SessionListEntry[] } | SessionListEntry[] | null;
+      if (Array.isArray(wrapped)) return wrapped;
+      return wrapped?.sessions ?? [];
+    })
+    .catch(() => [] as SessionListEntry[]);
+  sessionsCache = { workspacePath, at: Date.now(), promise };
+  return promise;
+}
+
 /**
  * Returns the list of AI sessions that have an "edited" FileLink for the given file.
  * `absoluteFilePath` MUST be the absolute path on disk — that's the form the
@@ -94,13 +113,7 @@ export function useSessionsForFile(
         }
 
         const [allSessions, linksRes] = await Promise.all([
-          ipc.invoke('sessions:list', workspacePath, { includeArchived: true })
-            .then(r => {
-              const wrapped = r as { success?: boolean; sessions?: SessionListEntry[] } | SessionListEntry[] | null;
-              if (Array.isArray(wrapped)) return wrapped;
-              return wrapped?.sessions ?? [];
-            })
-            .catch(() => [] as SessionListEntry[]),
+          listSessions(workspacePath),
           ipc.invoke('session-files:get-by-sessions', sessionIds, 'edited')
             .then(r => r as { success: boolean; files: FileLinkRow[]; error?: string })
             .catch(() => ({ success: false, files: [] as FileLinkRow[], error: 'Fetch failed' })),

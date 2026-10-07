@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Git Insights v2 mockup</title>
+<style>
+:root {
+  --nim-bg:#17181b; --nim-bg-secondary:#1d1f23; --nim-bg-hover:#26282d; --nim-text:#e6e7ea; --nim-text-muted:#a4a7ae;
+  --nim-text-faint:#6f737b; --nim-border:#2c2f35; --nim-primary:#5b9cf6; --nim-danger:#f2706b;
+  --nim-success:#4cc38a; --nim-warning:#e5b45a;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; padding:20px; background:#0e0f11; color:var(--nim-text); font:12px/1.4 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif; font-variant-numeric:tabular-nums; }
+.num { font-variant-numeric:tabular-nums; }
+.faint { color:var(--nim-text-faint); }
+.muted { color:var(--nim-text-muted); }
+.mono { font-family:var(--mono); font-size:11px; }
+.add { color:var(--nim-success); } .del { color:var(--nim-danger); }
+.section-label { width:1100px; margin:0 auto 8px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--nim-text-faint); }
+
+/* host chrome (bottom panel tab strip) */
+.host { width:1100px; margin:0 auto; border:1px solid var(--nim-border); border-radius:8px; overflow:hidden; background:var(--nim-bg); }
+.host-tabs { display:flex; gap:16px; padding:0 12px; height:28px; align-items:center; background:var(--nim-bg-secondary); border-bottom:1px solid var(--nim-border); font-size:11px; color:var(--nim-text-faint); }
+.host-tabs .on { color:var(--nim-text); box-shadow:inset 0 -2px 0 var(--nim-primary); height:100%; display:flex; align-items:center; }
+
+/* toolbar */
+.toolbar { display:flex; align-items:center; gap:12px; padding:6px 10px; border-bottom:1px solid var(--nim-border); }
+.ctx { display:flex; align-items:center; gap:6px; color:var(--nim-text-muted); white-space:nowrap; }
+.ctx b { color:var(--nim-text); font-weight:600; }
+.ctx .ab { font-family:var(--mono); font-size:11px; }
+.tabs { display:flex; gap:2px; margin:0 auto; }
+.tab { padding:4px 10px; border-radius:4px; color:var(--nim-text-faint); display:flex; align-items:center; gap:6px; }
+.tab.on { background:var(--nim-bg-hover); color:var(--nim-text); }
+.badge { background:var(--nim-bg-hover); color:var(--nim-text-muted); border-radius:999px; padding:0 6px; font-size:10px; line-height:16px; }
+.tab.on .badge { background:var(--nim-border); }
+.iconbtn { width:26px; height:26px; display:grid; place-items:center; font-size:15px; border:1px solid var(--nim-border); border-radius:4px; color:var(--nim-text-muted); }
+.split { display:flex; border-radius:4px; overflow:hidden; background:var(--nim-primary); color:#0b1220; font-weight:600; }
+.split span { padding:5px 10px; }
+.split span + span { padding:5px 7px; border-left:1px solid rgba(0,0,0,.25); }
+
+.content { padding:12px; display:flex; flex-direction:column; gap:12px; }
+.card { border:1px solid var(--nim-border); border-radius:6px; background:var(--nim-bg); }
+.card-h { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--nim-border); }
+.card-h h3 { margin:0; font-size:12px; font-weight:600; }
+
+/* KPIs */
+.kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.kpi { border:1px solid var(--nim-border); border-radius:6px; padding:8px 12px; }
+.kpi .k { color:var(--nim-text-faint); font-size:11px; }
+.kpi .v { font-size:20px; font-weight:600; margin:2px 0 1px; letter-spacing:-.01em; }
+.kpi .v small { font-size:12px; color:var(--nim-text-faint); font-weight:400; }
+.kpi .s { font-size:11px; color:var(--nim-text-faint); }
+.split-bar { display:flex; height:4px; border-radius:2px; overflow:hidden; margin-top:4px; background:var(--nim-bg-hover); }
+
+/* heatmap */
+.hm-wrap { position:relative; padding:10px 12px 8px; }
+.hm-lbl { fill:var(--nim-text-faint); font-size:10px; font-family:-apple-system,sans-serif; }
+.l0 { fill:var(--nim-bg-hover); }
+.l1 { fill:var(--nim-primary); fill-opacity:.28; }
+.l2 { fill:var(--nim-primary); fill-opacity:.5; }
+.l3 { fill:var(--nim-primary); fill-opacity:.75; }
+.l4 { fill:var(--nim-primary); }
+.sel { stroke:var(--nim-text); stroke-width:1.5; }
+.hm-foot { display:flex; justify-content:space-between; align-items:center; padding-top:6px; padding-left:30px; color:var(--nim-text-faint); font-size:11px; }
+.legend { display:flex; align-items:center; gap:3px; }
+.legend i { width:11px; height:11px; border-radius:2px; display:inline-block; background:var(--nim-primary); }
+.select { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--nim-border); border-radius:4px; padding:3px 8px; color:var(--nim-text); background:var(--nim-bg-secondary); }
+.select::after { content:"▾"; color:var(--nim-text-faint); font-size:10px; }
+.popover { position:absolute; width:380px; background:var(--nim-bg-secondary); border:1px solid var(--nim-border); border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,.5); z-index:2; }
+.popover .ph { display:flex; justify-content:space-between; padding:7px 10px; border-bottom:1px solid var(--nim-border); font-weight:600; }
+.commit { display:grid; grid-template-columns:1fr auto auto; gap:10px; padding:6px 10px; align-items:baseline; }
+.commit:hover, .commit.hl { background:var(--nim-bg-hover); }
+.commit .subj { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.commit .meta { color:var(--nim-text-faint); font-size:11px; }
+.commit .hash { color:var(--nim-primary); }
+.popover .pf { padding:6px 10px; border-top:1px solid var(--nim-border); color:var(--nim-text-faint); font-size:11px; }
+
+/* lists */
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.row { display:grid; align-items:center; gap:10px; padding:5px 12px; }
+.row + .row { border-top:1px solid var(--nim-border); }
+.contrib { grid-template-columns:20px 120px 1fr 44px 40px; }
+.avatar { width:20px; height:20px; border-radius:50%; display:grid; place-items:center; font-size:9px; font-weight:700; color:#0b1220; }
+.bar { height:6px; background:var(--nim-bg-hover); border-radius:3px; overflow:hidden; }
+.bar i { display:block; height:100%; background:var(--nim-primary); border-radius:3px; }
+.r { text-align:right; }
+.hot { grid-template-columns:1fr 56px 52px 52px; }
+.path { font-family:var(--mono); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.path .dir { color:var(--nim-text-faint); }
+.hot .cnt { display:flex; align-items:center; gap:6px; justify-content:flex-end; }
+.hot .cnt i { display:inline-block; height:6px; border-radius:3px; background:var(--nim-primary); }
+.colhead { color:var(--nim-text-faint); font-size:11px; padding-top:6px; padding-bottom:4px; }
+
+/* other surfaces */
+.surfaces { width:1100px; margin:28px auto 0; display:grid; grid-template-columns:400px 1fr; gap:20px; align-items:start; }
+.cap { font-size:11px; color:var(--nim-text-faint); margin-bottom:6px; }
+.pr { background:var(--nim-bg-secondary); border:1px solid var(--nim-border); border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+.pr .ph { padding:10px 14px; border-bottom:1px solid var(--nim-border); font-weight:600; font-size:13px; }
+.pr .pb { padding:12px 14px; display:grid; grid-template-columns:44px 1fr; gap:10px 10px; align-items:start; }
+.pr label { color:var(--nim-text-faint); padding-top:5px; }
+.field { border:1px solid var(--nim-border); background:var(--nim-bg); border-radius:4px; padding:5px 8px; }
+.field.focus { border-color:var(--nim-primary); box-shadow:0 0 0 2px rgba(91,156,246,.2); }
+.field ul { margin:2px 0; padding-left:16px; color:var(--nim-text-muted); }
+.field ul li { margin:2px 0; }
+.chk { display:flex; align-items:center; gap:6px; color:var(--nim-text-muted); }
+.chk i { width:13px; height:13px; border:1px solid var(--nim-text-faint); border-radius:3px; display:inline-block; }
+.pr .pf { display:flex; justify-content:flex-end; gap:8px; padding:10px 14px; border-top:1px solid var(--nim-border); }
+.btn { padding:5px 12px; border-radius:4px; border:1px solid var(--nim-border); color:var(--nim-text); }
+.btn.primary { background:var(--nim-primary); border-color:var(--nim-primary); color:#0b1220; font-weight:600; }
+.branchline { display:flex; align-items:center; gap:8px; padding-top:2px; color:var(--nim-text-muted); }
+.branchline .mono { color:var(--nim-text); }
+
+.changes { border:1px solid var(--nim-border); border-radius:8px; background:var(--nim-bg); }
+.chg-bar { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--nim-border); }
+.seg { display:flex; border:1px solid var(--nim-border); border-radius:4px; overflow:hidden; font-size:11px; }
+.seg span { padding:3px 9px; color:var(--nim-text-faint); }
+.seg span.on { background:var(--nim-bg-hover); color:var(--nim-text); }
+.chg-body { padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+.sess { border:1px solid var(--nim-border); border-radius:6px; }
+.sess-h { display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--nim-bg-secondary); border-bottom:1px solid var(--nim-border); border-radius:6px 6px 0 0; }
+.sess-h .t { font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.prov { font-size:10px; padding:1px 6px; border-radius:3px; background:rgba(217,119,87,.16); color:#e39a7d; }
+.prov.manual { background:var(--nim-bg-hover); color:var(--nim-text-muted); }
+.file { display:grid; grid-template-columns:16px 8px 1fr 44px 40px; gap:8px; align-items:center; padding:4px 10px; }
+.st { width:16px; height:16px; border-radius:3px; display:grid; place-items:center; font-size:10px; font-weight:700; }
+.st.A { background:rgba(76,195,138,.16); color:var(--nim-success); }
+.st.M { background:rgba(229,180,90,.16); color:var(--nim-warning); }
+.st.D { background:rgba(242,112,107,.16); color:var(--nim-danger); }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--nim-success); }
+.dot.off { background:transparent; border:1px solid var(--nim-text-faint); }
+.more { padding:6px 10px; color:var(--nim-text-faint); font-size:11px; border:1px dashed var(--nim-border); border-radius:6px; }
+</style>
+</head>
+<body>
+
+<div class="section-label">Bottom panel · Git Insights · Overview tab</div>
+<div class="host">
+  <div class="host-tabs"><span>Terminal</span><span>Problems</span><span>Output</span><span class="on">Git Insights</span></div>
+
+  <div class="toolbar">
+    <div class="ctx">
+      <span>⎇</span><b>feature/login</b>
+      <span class="ab"><span class="add">↑3</span> <span class="faint">↓0</span></span>
+      <span class="faint">·</span><span>last commit 2h ago</span>
+    </div>
+    <div class="tabs">
+      <span class="tab on">Overview</span>
+      <span class="tab">Activity</span>
+      <span class="tab">Graph</span>
+      <span class="tab">Changes <span class="badge">12</span></span>
+    </div>
+    <span class="iconbtn" title="Refresh">⟳</span>
+    <div class="split"><span>Create PR</span><span>▾</span></div>
+  </div>
+
+  <div class="content">
+    <div class="kpis">
+      <div class="kpi"><div class="k">Commits · 30d</div><div class="v">142</div><div class="s"><span class="add">▲ 18%</span> vs prev 30d</div></div>
+      <div class="kpi"><div class="k">Active days</div><div class="v">21<small> / 30</small></div><div class="split-bar"><i style="width:70%;background:var(--nim-primary)"></i></div></div>
+      <div class="kpi"><div class="k">Streak</div><div class="v">6d</div><div class="s">longest 19d</div></div>
+      <div class="kpi"><div class="k">Contributors · 30d</div><div class="v">4</div><div class="s">2 new this month</div></div>
+      <div class="kpi"><div class="k">Uncommitted</div><div class="v">12</div><div class="s">8 AI · 4 manual</div><div class="split-bar"><i style="width:66.7%;background:var(--nim-primary)"></i><i style="width:33.3%;background:var(--nim-text-faint);opacity:.5"></i></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">
+        <h3><span class="num">1,284</span> commits in the last 12 months</h3>
+        <span class="select">Last 12 months</span>
+      </div>
+      <div class="hm-wrap">
+        <svg width="984" height="144" viewBox="0 0 984 144"><text x="30" y="11" class="hm-lbl">Oct</text><text x="102" y="11" class="hm-lbl">Nov</text><text x="192" y="11" class="hm-lbl">Dec</text><text x="264" y="11" class="hm-lbl">Jan</text><text x="336" y="11" class="hm-lbl">Feb</text><text x="408" y="11" class="hm-lbl">Mar</text><text x="498" y="11" class="hm-lbl">Apr</text><text x="570" y="11" class="hm-lbl">May</text><text x="660" y="11" class="hm-lbl">Jun</text><text x="732" y="11" class="hm-lbl">Jul</text><text x="804" y="11" class="hm-lbl">Aug</text><text x="894" y="11" class="hm-lbl">Sep</text><text x="0" y="47" class="hm-lbl">Mon</text><text x="0" y="83" class="hm-lbl">Wed</text><text x="0" y="119" class="hm-lbl">Fri</text><rect x="30" y="18" width="15" height="15" rx="3" class="l0"/><rect x="30" y="36" width="15" height="15" rx="3" class="l0"/><rect x="30" y="54" width="15" height="15" rx="3" class="l2"/><rect x="30" y="72" width="15" height="15" rx="3" class="l0"/><rect x="30" y="90" width="15" height="15" rx="3" class="l2"/><rect x="30" y="108" width="15" height="15" rx="3" class="l1"/><rect x="30" y="126" width="15" height="15" rx="3" class="l0"/><rect x="48" y="18" width="15" height="15" rx="3" class="l0"/><rect x="48" y="36" width="15" height="15" rx="3" class="l0"/><rect x="48" y="54" width="15" height="15" rx="3" class="l1"/><rect x="48" y="72" width="15" height="15" rx="3" class="l0"/><rect x="48" y="90" width="15" height="15" rx="3" class="l0"/><rect x="48" y="108" width="15" height="15" rx="3" class="l1"/><rect x="48" y="126" width="15" height="15" rx="3" class="l1"/><rect x="66" y="18" width="15" height="15" rx="3" class="l0"/><rect x="66" y="36" width="15" height="15" rx="3" class="l1"/><rect x="66" y="54" width="15" height="15" rx="3" class="l2"/><rect x="66" y="72" width="15" height="15" rx="3" class="l4"/><rect x="66" y="90" width="15" height="15" rx="3" class="l2"/><rect x="66" y="108" width="15" height="15" rx="3" class="l1"/><rect x="66" y="126" width="15" height="15" rx="3" class="l2"/><rect x="84" y="18" width="15" height="15" rx="3" class="l0"/><rect x="84" y="36" width="15" height="15" rx="3" class="l3"/><rect x="84" y="54" width="15" height="15" rx="3" class="l1"/><rect x="84" y="72" width="15" height="15" rx="3" class="l0"/><rect x="84" y="90" width="15" height="15" rx="3" class="l0"/><rect x="84" y="108" width="15" height="15" rx="3" class="l1"/><rect x="84" y="126" width="15" height="15" rx="3" class="l1"/><rect x="102" y="18" width="15" height="15" rx="3" class="l0"/><rect x="102" y="36" width="15" height="15" rx="3" class="l2"/><rect x="102" y="54" width="15" height="15" rx="3" class="l2"/><rect x="102" y="72" width="15" height="15" rx="3" class="l1"/><rect x="102" y="90" width="15" height="15" rx="3" class="l2"/><rect x="102" y="108" width="15" height="15" rx="3" class="l0"/><rect x="102" y="126" width="15" height="15" rx="3" class="l0"/><rect x="120" y="18" width="15" height="15" rx="3" class="l0"/><rect x="120" y="36" width="15" height="15" rx="3" class="l2"/><rect x="120" y="54" width="15" height="15" rx="3" class="l1"/><rect x="120" y="72" width="15" height="15" rx="3" class="l1"/><rect x="120" y="90" width="15" height="15" rx="3" class="l2"/><rect x="120" y="108" width="15" height="15" rx="3" class="l2"/><rect x="120" y="126" width="15" height="15" rx="3" class="l0"/><rect x="138" y="18" width="15" height="15" rx="3" class="l1"/><rect x="138" y="36" width="15" height="15" rx="3" class="l2"/><rect x="138" y="54" width="15" height="15" rx="3" class="l1"/><rect x="138" y="72" width="15" height="15" rx="3" class="l2"/><rect x="138" y="90" width="15" height="15" rx="3" class="l2"/><rect x="138" y="108" width="15" height="15" rx="3" class="l3"/><rect x="138" y="126" width="15" height="15" rx="3" class="l1"/><rect x="156" y="18" width="15" height="15" rx="3" class="l0"/><rect x="156" y="36" width="15" height="15" rx="3" class="l4"/><rect x="156" y="54" width="15" height="15" rx="3" class="l0"/><rect x="156" y="72" width="15" height="15" rx="3" class="l1"/><rect x="156" y="90" width="15" height="15" rx="3" class="l3"/><rect x="156" y="108" width="15" height="15" rx="3" class="l0"/><rect x="156" y="126" width="15" height="15" rx="3" class="l0"/><rect x="174" y="18" width="15" height="15" rx="3" class="l0"/><rect x="174" y="36" width="15" height="15" rx="3" class="l2"/><rect x="174" y="54" width="15" height="15" rx="3" class="l3"/><rect x="174" y="72" width="15" height="15" rx="3" class="l2"/><rect x="174" y="90" width="15" height="15" rx="3" class="l3"/><rect x="174" y="108" width="15" height="15" rx="3" class="l1"/><rect x="174" y="126" width="15" height="15" rx="3" class="l0"/><rect x="192" y="18" width="15" height="15" rx="3" class="l0"/><rect x="192" y="36" width="15" height="15" rx="3" class="l2"/><rect x="192" y="54" width="15" height="15" rx="3" class="l2"/><rect x="192" y="72" width="15" height="15" rx="3" class="l3"/><rect x="192" y="90" width="15" height="15" rx="3" class="l4"/><rect x="192" y="108" width="15" height="15" rx="3" class="l2"/><rect x="192" y="126" width="15" height="15" rx="3" class="l0"/><rect x="210" y="18" width="15" height="15" rx="3" class="l0"/><rect x="210" y="36" width="15" height="15" rx="3" class="l2"/><rect x="210" y="54" width="15" height="15" rx="3" class="l2"/><rect x="210" y="72" width="15" height="15" rx="3" class="l4"/><rect x="210" y="90" width="15" height="15" rx="3" class="l3"/><rect x="210" y="108" width="15" height="15" rx="3" class="l1"/><rect x="210" y="126" width="15" height="15" rx="3" class="l0"/><rect x="228" y="18" width="15" height="15" rx="3" class="l0"/><rect x="228" y="36" width="15" height="15" rx="3" class="l0"/><rect x="228" y="54" width="15" height="15" rx="3" class="l0"/><rect x="228" y="72" width="15" height="15" rx="3" class="l0"/><rect x="228" y="90" width="15" height="15" rx="3" class="l0"/><rect x="228" y="108" width="15" height="15" rx="3" class="l0"/><rect x="228" y="126" width="15" height="15" rx="3" class="l0"/><rect x="246" y="18" width="15" height="15" rx="3" class="l0"/><rect x="246" y="36" width="15" height="15" rx="3" class="l0"/><rect x="246" y="54" width="15" height="15" rx="3" class="l0"/><rect x="246" y="72" width="15" height="15" rx="3" class="l1"/><rect x="246" y="90" width="15" height="15" rx="3" class="l0"/><rect x="246" y="108" width="15" height="15" rx="3" class="l0"/><rect x="246" y="126" width="15" height="15" rx="3" class="l0"/><rect x="264" y="18" width="15" height="15" rx="3" class="l1"/><rect x="264" y="36" width="15" height="15" rx="3" class="l3"/><rect x="264" y="54" width="15" height="15" rx="3" class="l3"/><rect x="264" y="72" width="15" height="15" rx="3" class="l1"/><rect x="264" y="90" width="15" height="15" rx="3" class="l1"/><rect x="264" y="108" width="15" height="15" rx="3" class="l1"/><rect x="264" y="126" width="15" height="15" rx="3" class="l1"/><rect x="282" y="18" width="15" height="15" rx="3" class="l2"/><rect x="282" y="36" width="15" height="15" rx="3" class="l0"/><rect x="282" y="54" width="15" height="15" rx="3" class="l0"/><rect x="282" y="72" width="15" height="15" rx="3" class="l1"/><rect x="282" y="90" width="15" height="15" rx="3" class="l1"/><rect x="282" y="108" width="15" height="15" rx="3" class="l2"/><rect x="282" y="126" width="15" height="15" rx="3" class="l0"/><rect x="300" y="18" width="15" height="15" rx="3" class="l0"/><rect x="300" y="36" width="15" height="15" rx="3" class="l0"/><rect x="300" y="54" width="15" height="15" rx="3" class="l1"/><rect x="300" y="72" width="15" height="15" rx="3" class="l1"/><rect x="300" y="90" width="15" height="15" rx="3" class="l2"/><rect x="300" y="108" width="15" height="15" rx="3" class="l4"/><rect x="300" y="126" width="15" height="15" rx="3" class="l0"/><rect x="318" y="18" width="15" height="15" rx="3" class="l0"/><rect x="318" y="36" width="15" height="15" rx="3" class="l2"/><rect x="318" y="54" width="15" height="15" rx="3" class="l2"/><rect x="318" y="72" width="15" height="15" rx="3" class="l0"/><rect x="318" y="90" width="15" height="15" rx="3" class="l3"/><rect x="318" y="108" width="15" height="15" rx="3" class="l3"/><rect x="318" y="126" width="15" height="15" rx="3" class="l1"/><rect x="336" y="18" width="15" height="15" rx="3" class="l1"/><rect x="336" y="36" width="15" height="15" rx="3" class="l1"/><rect x="336" y="54" width="15" height="15" rx="3" class="l1"/><rect x="336" y="72" width="15" height="15" rx="3" class="l0"/><rect x="336" y="90" width="15" height="15" rx="3" class="l2"/><rect x="336" y="108" width="15" height="15" rx="3" class="l0"/><rect x="336" y="126" width="15" height="15" rx="3" class="l0"/><rect x="354" y="18" width="15" height="15" rx="3" class="l0"/><rect x="354" y="36" width="15" height="15" rx="3" class="l0"/><rect x="354" y="54" width="15" height="15" rx="3" class="l1"/><rect x="354" y="72" width="15" height="15" rx="3" class="l0"/><rect x="354" y="90" width="15" height="15" rx="3" class="l0"/><rect x="354" y="108" width="15" height="15" rx="3" class="l0"/><rect x="354" y="126" width="15" height="15" rx="3" class="l0"/><rect x="372" y="18" width="15" height="15" rx="3" class="l0"/><rect x="372" y="36" width="15" height="15" rx="3" class="l0"/><rect x="372" y="54" width="15" height="15" rx="3" class="l3"/><rect x="372" y="72" width="15" height="15" rx="3" class="l2"/><rect x="372" y="90" width="15" height="15" rx="3" class="l0"/><rect x="372" y="108" width="15" height="15" rx="3" class="l1"/><rect x="372" y="126" width="15" height="15" rx="3" class="l0"/><rect x="390" y="18" width="15" height="15" rx="3" class="l0"/><rect x="390" y="36" width="15" height="15" rx="3" class="l0"/><rect x="390" y="54" width="15" height="15" rx="3" class="l3"/><rect x="390" y="72" width="15" height="15" rx="3" class="l4"/><rect x="390" y="90" width="15" height="15" rx="3" class="l2"/><rect x="390" y="108" width="15" height="15" rx="3" class="l2"/><rect x="390" y="126" width="15" height="15" rx="3" class="l0"/><rect x="408" y="18" width="15" height="15" rx="3" class="l0"/><rect x="408" y="36" width="15" height="15" rx="3" class="l1"/><rect x="408" y="54" width="15" height="15" rx="3" class="l1"/><rect x="408" y="72" width="15" height="15" rx="3" class="l3"/><rect x="408" y="90" width="15" height="15" rx="3" class="l0"/><rect x="408" y="108" width="15" height="15" rx="3" class="l0"/><rect x="408" y="126" width="15" height="15" rx="3" class="l2"/><rect x="426" y="18" width="15" height="15" rx="3" class="l0"/><rect x="426" y="36" width="15" height="15" rx="3" class="l0"/><rect x="426" y="54" width="15" height="15" rx="3" class="l2"/><rect x="426" y="72" width="15" height="15" rx="3" class="l0"/><rect x="426" y="90" width="15" height="15" rx="3" class="l2"/><rect x="426" y="108" width="15" height="15" rx="3" class="l4"/><rect x="426" y="126" width="15" height="15" rx="3" class="l1"/><rect x="444" y="18" width="15" height="15" rx="3" class="l0"/><rect x="444" y="36" width="15" height="15" rx="3" class="l1"/><rect x="444" y="54" width="15" height="15" rx="3" class="l1"/><rect x="444" y="72" width="15" height="15" rx="3" class="l0"/><rect x="444" y="90" width="15" height="15" rx="3" class="l3"/><rect x="444" y="108" width="15" height="15" rx="3" class="l2"/><rect x="444" y="126" width="15" height="15" rx="3" class="l1"/><rect x="462" y="18" width="15" height="15" rx="3" class="l0"/><rect x="462" y="36" width="15" height="15" rx="3" class="l1"/><rect x="462" y="54" width="15" height="15" rx="3" class="l3"/><rect x="462" y="72" width="15" height="15" rx="3" class="l4"/><rect x="462" y="90" width="15" height="15" rx="3" class="l3"/><rect x="462" y="108" width="15" height="15" rx="3" class="l3"/><rect x="462" y="126" width="15" height="15" rx="3" class="l1"/><rect x="480" y="18" width="15" height="15" rx="3" class="l1"/><rect x="480" y="36" width="15" height="15" rx="3" class="l1"/><rect x="480" y="54" width="15" height="15" rx="3" class="l2"/><rect x="480" y="72" width="15" height="15" rx="3" class="l1"/><rect x="480" y="90" width="15" height="15" rx="3" class="l0"/><rect x="480" y="108" width="15" height="15" rx="3" class="l0"/><rect x="480" y="126" width="15" height="15" rx="3" class="l0"/><rect x="498" y="18" width="15" height="15" rx="3" class="l0"/><rect x="498" y="36" width="15" height="15" rx="3" class="l2"/><rect x="498" y="54" width="15" height="15" rx="3" class="l4"/><rect x="498" y="72" width="15" height="15" rx="3" class="l1"/><rect x="498" y="90" width="15" height="15" rx="3" class="l4"/><rect x="498" y="108" width="15" height="15" rx="3" class="l4"/><rect x="498" y="126" width="15" height="15" rx="3" class="l2"/><rect x="516" y="18" width="15" height="15" rx="3" class="l0"/><rect x="516" y="36" width="15" height="15" rx="3" class="l1"/><rect x="516" y="54" width="15" height="15" rx="3" class="l1"/><rect x="516" y="72" width="15" height="15" rx="3" class="l1"/><rect x="516" y="90" width="15" height="15" rx="3" class="l1"/><rect x="516" y="108" width="15" height="15" rx="3" class="l2"/><rect x="516" y="126" width="15" height="15" rx="3" class="l1"/><rect x="534" y="18" width="15" height="15" rx="3" class="l1"/><rect x="534" y="36" width="15" height="15" rx="3" class="l2"/><rect x="534" y="54" width="15" height="15" rx="3" class="l2"/><rect x="534" y="72" width="15" height="15" rx="3" class="l3"/><rect x="534" y="90" width="15" height="15" rx="3" class="l0"/><rect x="534" y="108" width="15" height="15" rx="3" class="l2"/><rect x="534" y="126" width="15" height="15" rx="3" class="l1"/><rect x="552" y="18" width="15" height="15" rx="3" class="l1"/><rect x="552" y="36" width="15" height="15" rx="3" class="l3"/><rect x="552" y="54" width="15" height="15" rx="3" class="l2"/><rect x="552" y="72" width="15" height="15" rx="3" class="l0"/><rect x="552" y="90" width="15" height="15" rx="3" class="l3"/><rect x="552" y="108" width="15" height="15" rx="3" class="l1"/><rect x="552" y="126" width="15" height="15" rx="3" class="l1"/><rect x="570" y="18" width="15" height="15" rx="3" class="l2"/><rect x="570" y="36" width="15" height="15" rx="3" class="l1"/><rect x="570" y="54" width="15" height="15" rx="3" class="l1"/><rect x="570" y="72" width="15" height="15" rx="3" class="l4"/><rect x="570" y="90" width="15" height="15" rx="3" class="l3"/><rect x="570" y="108" width="15" height="15" rx="3" class="l0"/><rect x="570" y="126" width="15" height="15" rx="3" class="l0"/><rect x="588" y="18" width="15" height="15" rx="3" class="l0"/><rect x="588" y="36" width="15" height="15" rx="3" class="l3"/><rect x="588" y="54" width="15" height="15" rx="3" class="l3"/><rect x="588" y="72" width="15" height="15" rx="3" class="l0"/><rect x="588" y="90" width="15" height="15" rx="3" class="l3"/><rect x="588" y="108" width="15" height="15" rx="3" class="l4"/><rect x="588" y="126" width="15" height="15" rx="3" class="l0"/><rect x="606" y="18" width="15" height="15" rx="3" class="l0"/><rect x="606" y="36" width="15" height="15" rx="3" class="l2"/><rect x="606" y="54" width="15" height="15" rx="3" class="l0"/><rect x="606" y="72" width="15" height="15" rx="3" class="l0"/><rect x="606" y="90" width="15" height="15" rx="3" class="l4"/><rect x="606" y="108" width="15" height="15" rx="3" class="l2"/><rect x="606" y="126" width="15" height="15" rx="3" class="l0"/><rect x="624" y="18" width="15" height="15" rx="3" class="l2"/><rect x="624" y="36" width="15" height="15" rx="3" class="l1"/><rect x="624" y="54" width="15" height="15" rx="3" class="l3"/><rect x="624" y="72" width="15" height="15" rx="3" class="l3"/><rect x="624" y="90" width="15" height="15" rx="3" class="l1"/><rect x="624" y="108" width="15" height="15" rx="3" class="l1"/><rect x="624" y="126" width="15" height="15" rx="3" class="l0"/><rect x="642" y="18" width="15" height="15" rx="3" class="l0"/><rect x="642" y="36" width="15" height="15" rx="3" class="l2"/><rect x="642" y="54" width="15" height="15" rx="3" class="l1"/><rect x="642" y="72" width="15" height="15" rx="3" class="l1"/><rect x="642" y="90" width="15" height="15" rx="3" class="l0"/><rect x="642" y="108" width="15" height="15" rx="3" class="l3"/><rect x="642" y="126" width="15" height="15" rx="3" class="l0"/><rect x="660" y="18" width="15" height="15" rx="3" class="l0"/><rect x="660" y="36" width="15" height="15" rx="3" class="l2"/><rect x="660" y="54" width="15" height="15" rx="3" class="l3"/><rect x="660" y="72" width="15" height="15" rx="3" class="l1"/><rect x="660" y="90" width="15" height="15" rx="3" class="l3"/><rect x="660" y="108" width="15" height="15" rx="3" class="l2"/><rect x="660" y="126" width="15" height="15" rx="3" class="l0"/><rect x="678" y="18" width="15" height="15" rx="3" class="l0"/><rect x="678" y="36" width="15" height="15" rx="3" class="l0"/><rect x="678" y="54" width="15" height="15" rx="3" class="l1"/><rect x="678" y="72" width="15" height="15" rx="3" class="l1"/><rect x="678" y="90" width="15" height="15" rx="3" class="l0"/><rect x="678" y="108" width="15" height="15" rx="3" class="l3"/><rect x="678" y="126" width="15" height="15" rx="3" class="l0"/><rect x="696" y="18" width="15" height="15" rx="3" class="l0"/><rect x="696" y="36" width="15" height="15" rx="3" class="l3"/><rect x="696" y="54" width="15" height="15" rx="3" class="l2"/><rect x="696" y="72" width="15" height="15" rx="3" class="l1"/><rect x="696" y="90" width="15" height="15" rx="3" class="l2"/><rect x="696" y="108" width="15" height="15" rx="3" class="l2"/><rect x="696" y="126" width="15" height="15" rx="3" class="l1"/><rect x="714" y="18" width="15" height="15" rx="3" class="l0"/><rect x="714" y="36" width="15" height="15" rx="3" class="l2"/><rect x="714" y="54" width="15" height="15" rx="3" class="l1"/><rect x="714" y="72" width="15" height="15" rx="3" class="l1"/><rect x="714" y="90" width="15" height="15" rx="3" class="l3"/><rect x="714" y="108" width="15" height="15" rx="3" class="l2"/><rect x="714" y="126" width="15" height="15" rx="3" class="l0"/><rect x="732" y="18" width="15" height="15" rx="3" class="l1"/><rect x="732" y="36" width="15" height="15" rx="3" class="l3"/><rect x="732" y="54" width="15" height="15" rx="3" class="l1"/><rect x="732" y="72" width="15" height="15" rx="3" class="l2"/><rect x="732" y="90" width="15" height="15" rx="3" class="l2"/><rect x="732" y="108" width="15" height="15" rx="3" class="l2"/><rect x="732" y="126" width="15" height="15" rx="3" class="l0"/><rect x="750" y="18" width="15" height="15" rx="3" class="l0"/><rect x="750" y="36" width="15" height="15" rx="3" class="l2"/><rect x="750" y="54" width="15" height="15" rx="3" class="l2"/><rect x="750" y="72" width="15" height="15" rx="3" class="l4"/><rect x="750" y="90" width="15" height="15" rx="3" class="l2"/><rect x="750" y="108" width="15" height="15" rx="3" class="l3"/><rect x="750" y="126" width="15" height="15" rx="3" class="l2"/><rect x="768" y="18" width="15" height="15" rx="3" class="l0"/><rect x="768" y="36" width="15" height="15" rx="3" class="l2"/><rect x="768" y="54" width="15" height="15" rx="3" class="l4"/><rect x="768" y="72" width="15" height="15" rx="3" class="l3"/><rect x="768" y="90" width="15" height="15" rx="3" class="l0"/><rect x="768" y="108" width="15" height="15" rx="3" class="l0"/><rect x="768" y="126" width="15" height="15" rx="3" class="l0"/><rect x="786" y="18" width="15" height="15" rx="3" class="l0"/><rect x="786" y="36" width="15" height="15" rx="3" class="l1"/><rect x="786" y="54" width="15" height="15" rx="3" class="l0"/><rect x="786" y="72" width="15" height="15" rx="3" class="l2"/><rect x="786" y="90" width="15" height="15" rx="3" class="l3"/><rect x="786" y="108" width="15" height="15" rx="3" class="l3"/><rect x="786" y="126" width="15" height="15" rx="3" class="l0"/><rect x="804" y="18" width="15" height="15" rx="3" class="l1"/><rect x="804" y="36" width="15" height="15" rx="3" class="l2"/><rect x="804" y="54" width="15" height="15" rx="3" class="l0"/><rect x="804" y="72" width="15" height="15" rx="3" class="l3"/><rect x="804" y="90" width="15" height="15" rx="3" class="l4"/><rect x="804" y="108" width="15" height="15" rx="3" class="l1"/><rect x="804" y="126" width="15" height="15" rx="3" class="l2"/><rect x="822" y="18" width="15" height="15" rx="3" class="l0"/><rect x="822" y="36" width="15" height="15" rx="3" class="l2"/><rect x="822" y="54" width="15" height="15" rx="3" class="l4"/><rect x="822" y="72" width="15" height="15" rx="3" class="l3"/><rect x="822" y="90" width="15" height="15" rx="3" class="l0"/><rect x="822" y="108" width="15" height="15" rx="3" class="l1"/><rect x="822" y="126" width="15" height="15" rx="3" class="l0"/><rect x="840" y="18" width="15" height="15" rx="3" class="l0"/><rect x="840" y="36" width="15" height="15" rx="3" class="l1"/><rect x="840" y="54" width="15" height="15" rx="3" class="l1"/><rect x="840" y="72" width="15" height="15" rx="3" class="l3"/><rect x="840" y="90" width="15" height="15" rx="3" class="l0"/><rect x="840" y="108" width="15" height="15" rx="3" class="l2"/><rect x="840" y="126" width="15" height="15" rx="3" class="l0"/><rect x="858" y="18" width="15" height="15" rx="3" class="l0"/><rect x="858" y="36" width="15" height="15" rx="3" class="l1"/><rect x="858" y="54" width="15" height="15" rx="3" class="l2"/><rect x="858" y="72" width="15" height="15" rx="3" class="l2"/><rect x="858" y="90" width="15" height="15" rx="3" class="l0"/><rect x="858" y="108" width="15" height="15" rx="3" class="l4"/><rect x="858" y="126" width="15" height="15" rx="3" class="l1"/><rect x="876" y="18" width="15" height="15" rx="3" class="l2"/><rect x="876" y="36" width="15" height="15" rx="3" class="l0"/><rect x="876" y="54" width="15" height="15" rx="3" class="l1"/><rect x="876" y="72" width="15" height="15" rx="3" class="l0"/><rect x="876" y="90" width="15" height="15" rx="3" class="l3"/><rect x="876" y="108" width="15" height="15" rx="3" class="l1"/><rect x="876" y="126" width="15" height="15" rx="3" class="l0"/><rect x="894" y="18" width="15" height="15" rx="3" class="l0"/><rect x="894" y="36" width="15" height="15" rx="3" class="l3"/><rect x="894" y="54" width="15" height="15" rx="3" class="l3"/><rect x="894" y="72" width="15" height="15" rx="3" class="l1"/><rect x="894" y="90" width="15" height="15" rx="3" class="l0"/><rect x="894" y="108" width="15" height="15" rx="3" class="l3"/><rect x="894" y="126" width="15" height="15" rx="3" class="l0"/><rect x="912" y="18" width="15" height="15" rx="3" class="l1"/><rect x="912" y="36" width="15" height="15" rx="3" class="l0"/><rect x="912" y="54" width="15" height="15" rx="3" class="l3 sel"/><rect x="912" y="72" width="15" height="15" rx="3" class="l2"/><rect x="912" y="90" width="15" height="15" rx="3" class="l1"/><rect x="912" y="108" width="15" height="15" rx="3" class="l0"/><rect x="912" y="126" width="15" height="15" rx="3" class="l2"/><rect x="930" y="18" width="15" height="15" rx="3" class="l0"/><rect x="930" y="36" width="15" height="15" rx="3" class="l3"/><rect x="930" y="54" width="15" height="15" rx="3" class="l0"/><rect x="930" y="72" width="15" height="15" rx="3" class="l3"/><rect x="930" y="90" width="15" height="15" rx="3" class="l0"/><rect x="930" y="108" width="15" height="15" rx="3" class="l3"/><rect x="930" y="126" width="15" height="15" rx="3" class="l0"/><rect x="948" y="18" width="15" height="15" rx="3" class="l0"/><rect x="948" y="36" width="15" height="15" rx="3" class="l2"/><rect x="948" y="54" width="15" height="15" rx="3" class="l4"/><rect x="948" y="72" width="15" height="15" rx="3" class="l1"/><rect x="948" y="90" width="15" height="15" rx="3" class="l0"/><rect x="948" y="108" width="15" height="15" rx="3" class="l2"/><rect x="948" y="126" width="15" height="15" rx="3" class="l0"/><rect x="966" y="18" width="15" height="15" rx="3" class="l0"/><rect x="966" y="36" width="15" height="15" rx="3" class="l0"/><rect x="966" y="54" width="15" height="15" rx="3" class="l0"/><rect x="966" y="72" width="15" height="15" rx="3" class="l1"/></svg>
+        <div class="popover" style="left:532px; top:30px">
+          <div class="ph"><span>Tue, Sep 15, 2026</span><span class="faint" style="font-weight:400">3 commits</span></div>
+          <div class="commit hl"><span class="subj">Fix UTC offset in heatmap date keys</span><span class="meta">Pawarit T.</span><span class="mono hash">a1f3c9e</span></div>
+          <div class="commit"><span class="subj">Add get_repo_status backend tool</span><span class="meta">Mai K.</span><span class="mono hash">7be0d24</span></div>
+          <div class="commit"><span class="subj">Debounce git:status-changed refresh</span><span class="meta">Pawarit T.</span><span class="mono hash">3c91e0a</span></div>
+                  </div>
+        <div class="hm-foot">
+          <span>Click a day to see its commits · click a commit to open it in Graph</span>
+          <span class="legend">Less <i style="background:var(--nim-bg-hover)"></i><i style="opacity:.28"></i><i style="opacity:.5"></i><i style="opacity:.75"></i><i></i> More</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="card">
+        <div class="card-h"><h3>Top contributors</h3><span class="faint">last 12 months</span></div>
+        <div class="row contrib colhead"><span></span><span>Author</span><span>Share</span><span class="r">Commits</span><span class="r">%</span></div>
+        <div class="row contrib"><span class="avatar" style="background:#5b9cf6">PT</span><span>Pawarit T.</span><div class="bar"><i style="width:47.7%"></i></div><span class="r num">612</span><span class="r faint num">48%</span></div>
+        <div class="row contrib"><span class="avatar" style="background:#8fb9f9">MK</span><span>Mai K.</span><div class="bar"><i style="width:24.8%"></i></div><span class="r num">318</span><span class="r faint num">25%</span></div>
+        <div class="row contrib"><span class="avatar" style="background:#b4cffb">JL</span><span>Jordan Lee</span><div class="bar"><i style="width:15.7%"></i></div><span class="r num">201</span><span class="r faint num">16%</span></div>
+        <div class="row contrib"><span class="avatar" style="background:#cfe0fc">SN</span><span>Somchai N.</span><div class="bar"><i style="width:8.1%"></i></div><span class="r num">104</span><span class="r faint num">8%</span></div>
+        <div class="row contrib"><span class="avatar" style="background:#e1ebfd">AR</span><span>Alex Rivera</span><div class="bar"><i style="width:3.8%"></i></div><span class="r num">49</span><span class="r faint num">4%</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><h3>Hot files · 90d</h3><span class="faint">click to open</span></div>
+        <div class="row hot colhead"><span>File</span><span class="r">Changes</span><span class="r">+</span><span class="r">−</span></div>
+        <div class="row hot"><span class="path"><span class="dir">src/</span>backend.ts</span><span class="cnt"><i style="width:22px"></i><span class="num">38</span></span><span class="r add num">+1,204</span><span class="r del num">−612</span></div>
+        <div class="row hot"><span class="path"><span class="dir">src/components/</span>HeatmapCalendar.tsx</span><span class="cnt"><i style="width:14px"></i><span class="num">24</span></span><span class="r add num">+410</span><span class="r del num">−198</span></div>
+        <div class="row hot"><span class="path"><span class="dir">src/</span>commitActivity.ts</span><span class="cnt"><i style="width:12px"></i><span class="num">21</span></span><span class="r add num">+356</span><span class="r del num">−140</span></div>
+        <div class="row hot"><span class="path"><span class="dir">src/components/</span>GraphTab.tsx</span><span class="cnt"><i style="width:11px"></i><span class="num">19</span></span><span class="r add num">+522</span><span class="r del num">−87</span></div>
+        <div class="row hot"><span class="path"><span class="dir">src/</span>styles.css</span><span class="cnt"><i style="width:10px"></i><span class="num">17</span></span><span class="r add num">+288</span><span class="r del num">−64</span></div>
+        <div class="row hot"><span class="path"><span class="dir">src/hooks/</span>useWorkingChanges.ts</span><span class="cnt"><i style="width:7px"></i><span class="num">12</span></span><span class="r add num">+97</span><span class="r del num">−41</span></div>
+        <div class="row hot"><span class="path"><span class="dir">src/components/</span>PrCreateButton.tsx</span><span class="cnt"><i style="width:5px"></i><span class="num">9</span></span><span class="r add num">+73</span><span class="r del num">−30</span></div>
+        <div class="row hot"><span class="path">package.json</span><span class="cnt"><i style="width:4px"></i><span class="num">7</span></span><span class="r add num">+14</span><span class="r del num">−9</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-label" style="margin-top:32px">Other surfaces</div>
+<div class="surfaces" style="margin-top:0">
+  <div>
+    <div class="cap">(a) PR popover, opened from "Create PR"</div>
+    <div class="pr">
+      <div class="ph">Create pull request</div>
+      <div class="pb">
+        <label>base</label>
+        <div class="branchline"><span class="select mono">main</span><span><span class="mono">feature/login</span> → <span class="mono">main</span> · 3 commits</span></div>
+        <label>title</label>
+        <div class="field focus">Add login form validation</div>
+        <label>body</label>
+        <div class="field" style="min-height:92px">
+          <div class="muted">feature/login</div>
+          <ul>
+            <li>Validate email and password fields on blur</li>
+            <li>Show inline error messages under inputs</li>
+            <li>Disable submit until the form is valid</li>
+          </ul>
+        </div>
+        <span></span>
+        <span class="chk"><i></i>Draft</span>
+      </div>
+      <div class="pf"><span class="btn">Cancel</span><span class="btn primary">Create PR</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cap">(b) Changes tab, grouped by session</div>
+    <div class="changes">
+      <div class="chg-bar">
+        <span><b class="num">12 files</b> <span class="faint">·</span> <span class="muted">8 from 3 AI sessions</span> <span class="faint">·</span> <span class="muted">4 manual</span></span>
+        <span class="seg"><span>By file</span><span class="on">By session</span></span>
+      </div>
+      <div class="chg-body">
+        <div class="sess">
+          <div class="sess-h"><span class="t">Fix heatmap UTC date keys</span><span class="prov">claude</span><span class="faint">12m ago</span><span class="mono"><span class="add">+120</span> <span class="del">−30</span></span></div>
+          <div class="file"><span class="st M">M</span><span class="dot"></span><span class="path"><span class="dir">src/components/</span>HeatmapCalendar.tsx</span><span class="r add mono">+64</span><span class="r del mono">−22</span></div>
+          <div class="file"><span class="st A">A</span><span class="dot"></span><span class="path"><span class="dir">src/</span>repoStats.ts</span><span class="r add mono">+41</span><span class="r del mono">−0</span></div>
+          <div class="file"><span class="st M">M</span><span class="dot off"></span><span class="path"><span class="dir">src/components/</span>DistributionTab.tsx</span><span class="r add mono">+8</span><span class="r del mono">−8</span></div>
+          <div class="file"><span class="st A">A</span><span class="dot off"></span><span class="path"><span class="dir">src/</span>repoStats.test.ts</span><span class="r add mono">+7</span><span class="r del mono">−0</span></div>
+        </div>
+        <div class="sess">
+          <div class="sess-h"><span class="t">Replace PR button with popover</span><span class="prov">claude</span><span class="faint">1h ago</span><span class="mono"><span class="add">+86</span> <span class="del">−41</span></span></div>
+          <div class="file"><span class="st A">A</span><span class="dot off"></span><span class="path"><span class="dir">src/components/</span>PrPopover.tsx</span><span class="r add mono">+72</span><span class="r del mono">−0</span></div>
+          <div class="file"><span class="st D">D</span><span class="dot off"></span><span class="path"><span class="dir">src/components/</span>PrCreateButton.tsx</span><span class="r add mono">+0</span><span class="r del mono">−33</span></div>
+          <div class="file"><span class="st M">M</span><span class="dot off"></span><span class="path"><span class="dir">src/</span>backend.ts</span><span class="r add mono">+14</span><span class="r del mono">−8</span></div>
+        </div>
+        <div class="more">+ 1 more session · 1 file</div>
+        <div class="sess">
+          <div class="sess-h"><span class="t">Manual edits</span><span class="prov manual">no session</span><span class="mono"><span class="add">+19</span> <span class="del">−6</span></span></div>
+          <div class="file"><span class="st M">M</span><span class="dot"></span><span class="path">package.json</span><span class="r add mono">+2</span><span class="r del mono">−1</span></div>
+          <div class="file"><span class="st M">M</span><span class="dot off"></span><span class="path">README.md</span><span class="r add mono">+11</span><span class="r del mono">−3</span></div>
+          <div class="file"><span class="st M">M</span><span class="dot off"></span><span class="path"><span class="dir">src/</span>styles.css</span><span class="r add mono">+6</span><span class="r del mono">−2</span></div>
+          <div class="file"><span class="st D">D</span><span class="dot off"></span><span class="path">notes.txt</span><span class="r add mono">+0</span><span class="r del mono">−0</span></div>
+        </div>
+        <div class="faint" style="font-size:11px"><span class="dot" style="display:inline-block"></span> staged · click a file to open it</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="height:24px"></div>
+</body>
+</html>

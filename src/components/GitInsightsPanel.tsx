@@ -1,29 +1,99 @@
-import { useState } from 'react';
-import type { PanelHostProps } from '@nimbalyst/extension-sdk';
+import { useEffect, useState } from 'react';
+import type { PanelHost, PanelHostProps } from '@nimbalyst/extension-sdk';
+import { useBackendTool } from '../backendClient';
+import { localDateKey } from '../commitActivity';
 import { DistributionTab } from './DistributionTab';
-import { HeatmapTab } from './HeatmapTab';
+import { GraphTab } from './GraphTab';
 import { PrCreateButton } from './PrCreateButton';
+import { SummaryTab } from './SummaryTab';
 import { UncommittedFilesTab } from './UncommittedFilesTab';
 
-type TabId = 'heatmap' | 'distribution' | 'uncommitted';
+type TabId = 'graph' | 'summary' | 'distribution' | 'uncommitted';
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'heatmap', label: 'Heatmap' },
+  { id: 'graph', label: 'Graph' },
+  { id: 'summary', label: 'Summary' },
   { id: 'distribution', label: 'Distribution' },
   { id: 'uncommitted', label: 'Uncommitted' },
 ];
 
+/** Shared by Graph, Summary and Distribution. Unset fields mean "all branches" / "all time". */
+export interface InsightsFilter {
+  ref?: string;
+  /** Inclusive YYYY-MM-DD lower bound. */
+  since?: string;
+}
+
+const RANGES = [
+  { id: '7d', label: '7d', days: 7 },
+  { id: '30d', label: '30d', days: 30 },
+  { id: '90d', label: '90d', days: 90 },
+  { id: '1y', label: '1y', days: 365 },
+  { id: 'all', label: 'All', days: 0 },
+] as const;
+
+type RangeId = (typeof RANGES)[number]['id'];
+
+function sinceFor(range: RangeId): string | undefined {
+  const days = RANGES.find((r) => r.id === range)?.days ?? 0;
+  if (!days) return undefined;
+  const d = new Date();
+  d.setDate(d.getDate() - (days - 1));
+  return localDateKey(d);
+}
+
+export interface Branches {
+  current: string;
+  local: string[];
+  remote: string[];
+}
+
+/** `useState` that survives closing the panel, via the extension's workspace storage. */
+function useStored<T>(host: PanelHost, key: string, initial: T) {
+  const [value, setValue] = useState<T>(() => host.storage.get<T>(key) ?? initial);
+  const set = (next: T) => {
+    setValue(next);
+    void host.storage.set(key, next);
+  };
+  return [value, set] as const;
+}
+
 export function GitInsightsPanel({ host }: PanelHostProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('heatmap');
+  const [activeTab, setActiveTab] = useStored<TabId>(host, 'activeTab', 'graph');
+  const [ref, setRef] = useState('');
+  const [range, setRange] = useStored<RangeId>(host, 'range', 'all');
+  const [reloadKey, setReloadKey] = useState(0);
   const workspacePath = host.workspacePath;
+  const { data: branches } = useBackendTool<Branches>('get_branches', { repoPath: workspacePath }, reloadKey);
+  const reload = () => setReloadKey((k) => k + 1);
+
+  // Commits, checkouts and edits all fire this; bursts collapse into one reload.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const off = host.onWorkspaceEvent('git:status-changed', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setReloadKey((k) => k + 1), 500);
+    });
+    return () => {
+      off();
+      clearTimeout(timer);
+    };
+  }, [host]);
 
   if (!workspacePath) {
     return <div className="git-insights-panel git-insights-empty">Open a workspace to see Git Insights.</div>;
   }
 
+  const filter: InsightsFilter = { ref: ref || undefined, since: sinceFor(range) };
+
   return (
     <div className="git-insights-panel">
       <div className="git-insights-toolbar">
+        {branches && (
+          <span className="git-insights-branch select-text" title="Current branch">
+            ⎇ {branches.current || 'detached HEAD'}
+          </span>
+        )}
         <div className="git-insights-tabs" role="tablist">
           {TABS.map((tab) => (
             <button
@@ -38,13 +108,63 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
             </button>
           ))}
         </div>
-        <PrCreateButton workspacePath={workspacePath} />
+
+        {activeTab !== 'uncommitted' && (
+          <div className="git-insights-filters">
+            <select
+              className="git-insights-select"
+              aria-label="Branch"
+              value={ref}
+              onChange={(e) => setRef(e.target.value)}
+            >
+              <option value="">All branches</option>
+              {branches && branches.local.length > 0 && (
+                <optgroup label="Local">
+                  {branches.local.map((b) => (
+                    <option key={b} value={b}>{b === branches.current ? `${b} (current)` : b}</option>
+                  ))}
+                </optgroup>
+              )}
+              {branches && branches.remote.length > 0 && (
+                <optgroup label="Remote">
+                  {branches.remote.map((b) => <option key={b} value={b}>{b}</option>)}
+                </optgroup>
+              )}
+            </select>
+            <div className="git-insights-granularity-toggle" role="group" aria-label="Date range">
+              {RANGES.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className={r.id === range ? 'git-insights-granularity-button git-insights-granularity-button--active' : 'git-insights-granularity-button'}
+                  onClick={() => setRange(r.id)}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button type="button" className="git-insights-icon-button" title="Refresh" aria-label="Refresh" onClick={reload}>⟳</button>
+        <PrCreateButton workspacePath={workspacePath} branch={branches?.current} />
       </div>
 
       <div className="git-insights-content">
-        {activeTab === 'heatmap' && <HeatmapTab workspacePath={workspacePath} />}
-        {activeTab === 'distribution' && <DistributionTab workspacePath={workspacePath} />}
-        {activeTab === 'uncommitted' && <UncommittedFilesTab workspacePath={workspacePath} />}
+        {activeTab === 'graph' && (
+          <GraphTab
+            host={host}
+            workspacePath={workspacePath}
+            filter={filter}
+            branches={branches}
+            reloadKey={reloadKey}
+            onRepoChanged={reload}
+          />
+        )}
+        {activeTab === 'summary' && <SummaryTab workspacePath={workspacePath} filter={filter} reloadKey={reloadKey} />}
+        {/* Keyed by range so a manual granularity pick resets to auto when the range changes. */}
+        {activeTab === 'distribution' && <DistributionTab key={range} workspacePath={workspacePath} filter={filter} reloadKey={reloadKey} />}
+        {activeTab === 'uncommitted' && <UncommittedFilesTab host={host} workspacePath={workspacePath} reloadKey={reloadKey} />}
       </div>
     </div>
   );

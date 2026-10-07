@@ -1,57 +1,193 @@
+import { useState } from 'react';
+import type { PanelHost } from '@nimbalyst/extension-sdk';
+import { useBackendTool } from '../backendClient';
 import { useSessionsForFile } from '../hooks/useSessionsForFile';
-import { useWorkingChanges, type WorkingChangeFile } from '../hooks/useWorkingChanges';
+import { parseUnifiedDiff, type ChangeStatus, type WorkingChange } from '../workingChanges';
+
+const BADGE: Record<ChangeStatus, { letter: string; label: string }> = {
+  added: { letter: 'A', label: 'Added' },
+  modified: { letter: 'M', label: 'Modified' },
+  deleted: { letter: 'D', label: 'Deleted' },
+  renamed: { letter: 'R', label: 'Renamed' },
+  untracked: { letter: 'U', label: 'Untracked' },
+  conflicted: { letter: '!', label: 'Conflicted' },
+};
+
+const SECTIONS: { title: string; match: (f: WorkingChange) => boolean }[] = [
+  { title: 'Conflicts', match: (f) => f.status === 'conflicted' },
+  { title: 'Changes', match: (f) => f.status !== 'conflicted' && f.status !== 'untracked' },
+  { title: 'Untracked', match: (f) => f.status === 'untracked' },
+];
 
 function joinPath(workspacePath: string, relativePath: string): string {
   return `${workspacePath.replace(/\/+$/, '')}/${relativePath.replace(/^\/+/, '')}`;
 }
 
-function FileSessionsRow({ workspacePath, file }: { workspacePath: string; file: WorkingChangeFile }) {
-  const absolutePath = joinPath(workspacePath, file.path);
-  const { data, loading } = useSessionsForFile(workspacePath, absolutePath);
+function LineCounts({ added, deleted }: { added: number | null; deleted: number | null }) {
+  if (added === null && deleted === null) return <span className="git-insights-muted">binary</span>;
+  return (
+    <span className="git-insights-line-counts">
+      {!!added && <span className="git-insights-added">+{added}</span>}
+      {!!deleted && <span className="git-insights-deleted">−{deleted}</span>}
+    </span>
+  );
+}
+
+function DiffView({ workspacePath, file, reloadKey }: { workspacePath: string; file: WorkingChange; reloadKey: number }) {
+  const { data, error } = useBackendTool<{ diff: string; truncated: boolean }>(
+    'get_file_diff',
+    { repoPath: workspacePath, path: file.path, oldPath: file.oldPath, untracked: file.status === 'untracked' },
+    reloadKey,
+  );
+
+  if (error) return <div className="git-insights-error select-text">{error}</div>;
+  if (!data) return <div className="git-insights-loading">Loading diff…</div>;
+
+  const lines = parseUnifiedDiff(data.diff);
+  if (lines.length === 0) return <div className="git-insights-muted">No content changes (mode or rename only).</div>;
 
   return (
-    <li className="git-insights-uncommitted-row">
-      <div className="git-insights-uncommitted-file">
-        <span className={`git-insights-uncommitted-status git-insights-uncommitted-status--${file.status}`}>
-          {file.status === 'untracked' ? 'U' : 'M'}
+    <div className="git-insights-diff select-text">
+      <table>
+        <tbody>
+          {lines.map((line, i) => (
+            <tr key={i} className={`git-insights-diff-line git-insights-diff-line--${line.kind}`}>
+              <td className="git-insights-diff-num">{line.oldLine ?? ''}</td>
+              <td className="git-insights-diff-num">{line.newLine ?? ''}</td>
+              <td className="git-insights-diff-sign">{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</td>
+              <td className="git-insights-diff-text">{line.text}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.truncated && <div className="git-insights-muted">Diff truncated. Open the file to see the rest.</div>}
+    </div>
+  );
+}
+
+interface RowProps {
+  host: PanelHost;
+  workspacePath: string;
+  file: WorkingChange;
+  expanded: boolean;
+  onToggle: () => void;
+  reloadKey: number;
+}
+
+function FileRow({ host, workspacePath, file, expanded, onToggle, reloadKey }: RowProps) {
+  const absolutePath = joinPath(workspacePath, file.path);
+  const { data: sessions } = useSessionsForFile(workspacePath, absolutePath);
+  const slash = file.path.lastIndexOf('/');
+  const badge = BADGE[file.status];
+
+  return (
+    <li className="git-insights-change">
+      <div className="git-insights-change-row">
+        <button
+          type="button"
+          className="git-insights-icon-button git-insights-chevron"
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Hide diff' : 'Show diff'}
+          onClick={onToggle}
+        >
+          {expanded ? '▾' : '▸'}
+        </button>
+        <span className={`git-insights-badge git-insights-badge--${file.status}`} title={badge.label}>{badge.letter}</span>
+        {file.staged && <span className="git-insights-staged-dot" title={file.unstaged ? 'Partially staged' : 'Staged'} />}
+        <button
+          type="button"
+          className="git-insights-change-path"
+          title={file.status === 'deleted' ? file.path : `Open ${file.path}`}
+          disabled={file.status === 'deleted'}
+          onClick={() => host.openFile(absolutePath)}
+        >
+          {slash >= 0 && <span className="git-insights-change-dir">{file.path.slice(0, slash + 1)}</span>}
+          <span className="git-insights-change-name">{file.path.slice(slash + 1)}</span>
+          {file.oldPath && <span className="git-insights-change-dir"> ← {file.oldPath}</span>}
+        </button>
+        <LineCounts added={file.added} deleted={file.deleted} />
+        <span className="git-insights-change-sessions">
+          {sessions.length === 0 ? (
+            <span className="git-insights-muted">manual</span>
+          ) : (
+            sessions.map((s) => (
+              <span
+                key={s.sessionId}
+                className="git-insights-session-chip"
+                title={`${s.title}\n${s.provider} · ${s.editCount} edit${s.editCount === 1 ? '' : 's'} · +${s.linesAdded} −${s.linesRemoved}`}
+              >
+                {s.title}
+              </span>
+            ))
+          )}
         </span>
-        <span className="select-text">{file.path}</span>
       </div>
-      <div className="git-insights-uncommitted-sessions">
-        {loading && data.length === 0 && <span className="git-insights-muted">Loading…</span>}
-        {!loading && data.length === 0 && <span className="git-insights-muted">No AI session recorded</span>}
-        {data.map((session) => (
-          <span key={session.sessionId} className="git-insights-session-chip select-text" title={session.title}>
-            {session.title}
-          </span>
-        ))}
-      </div>
+      {expanded && <DiffView workspacePath={workspacePath} file={file} reloadKey={reloadKey} />}
     </li>
   );
 }
 
-/** Modified/untracked files with AI-session attribution, before anything is committed. */
-export function UncommittedFilesTab({ workspacePath }: { workspacePath: string }) {
-  const { files, loading, error, refresh } = useWorkingChanges(workspacePath);
+/** Modified/untracked files with line counts, inline diffs, and AI-session attribution. */
+export function UncommittedFilesTab({ host, workspacePath, reloadKey }: { host: PanelHost; workspacePath: string; reloadKey: number }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const { data, error } = useBackendTool<{ files: WorkingChange[] }>('get_working_changes', { repoPath: workspacePath }, reloadKey);
 
-  if (error) {
-    return <div className="git-insights-uncommitted-error select-text">{error}</div>;
-  }
+  if (error) return <div className="git-insights-error select-text">{error}</div>;
+  if (!data) return <div className="git-insights-loading">Loading changes…</div>;
+  if (data.files.length === 0) return <div className="git-insights-muted">Working tree clean. No uncommitted changes.</div>;
 
-  if (!loading && files.length === 0) {
-    return <div className="git-insights-uncommitted-empty">No modified or untracked files.</div>;
-  }
+  const files = data.files;
+  const added = files.reduce((sum, f) => sum + (f.added ?? 0), 0);
+  const deleted = files.reduce((sum, f) => sum + (f.deleted ?? 0), 0);
+  const allExpanded = expanded.size === files.length;
+  const toggle = (path: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(path)) next.add(path);
+      return next;
+    });
 
   return (
     <div className="git-insights-uncommitted">
       <div className="git-insights-uncommitted-toolbar">
-        <button type="button" onClick={refresh} className="git-insights-refresh-button">Refresh</button>
+        <span className="git-insights-summary-stats">
+          <span><strong>{files.length}</strong> file{files.length === 1 ? '' : 's'}</span>
+          <span><strong>{files.filter((f) => f.staged).length}</strong> staged</span>
+          <LineCounts added={added} deleted={deleted} />
+        </span>
+        <span className="git-insights-uncommitted-actions">
+          <button
+            type="button"
+            className="git-insights-granularity-button"
+            onClick={() => setExpanded(allExpanded ? new Set() : new Set(files.map((f) => f.path)))}
+          >
+            {allExpanded ? 'Collapse all' : 'Expand all'}
+          </button>
+        </span>
       </div>
-      <ul className="git-insights-uncommitted-list">
-        {files.map((file) => (
-          <FileSessionsRow key={file.path} workspacePath={workspacePath} file={file} />
-        ))}
-      </ul>
+
+      {SECTIONS.map((section) => {
+        const sectionFiles = files.filter(section.match);
+        if (sectionFiles.length === 0) return null;
+        return (
+          <section key={section.title}>
+            <h4 className="git-insights-section-title">{section.title} · {sectionFiles.length}</h4>
+            <ul className="git-insights-change-list">
+              {sectionFiles.map((file) => (
+                <FileRow
+                  key={file.path}
+                  host={host}
+                  workspacePath={workspacePath}
+                  file={file}
+                  expanded={expanded.has(file.path)}
+                  onToggle={() => toggle(file.path)}
+                  reloadKey={reloadKey}
+                />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -1,69 +1,78 @@
-import { useEffect, useState } from 'react';
-import { callBackendTool } from '../backendClient';
-import type { CommitDistribution, DistributionGranularity } from '../commitActivity';
-import { CommitDistributionChart } from './CommitDistributionChart';
+import { useState } from 'react';
+import { useBackendTool } from '../backendClient';
+import { localDateKey, type CommitDistribution, type DistributionGranularity } from '../commitActivity';
+import { BarChart } from './BarChart';
+import type { InsightsFilter } from './GitInsightsPanel';
 
-function defaultSince(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 90);
-  return d.toISOString().slice(0, 10);
+const MAX_TICKS = 8;
+
+/** Bucket size that keeps the bar count readable for the selected range. */
+function autoGranularity(since: string | undefined): DistributionGranularity {
+  if (!since) return 'month';
+  const days = (Date.now() - new Date(`${since}T00:00:00`).getTime()) / 86_400_000;
+  return days <= 31 ? 'day' : days <= 366 ? 'week' : 'month';
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
+function tickLabel(bucket: string, granularity: DistributionGranularity): string {
+  return granularity === 'month' ? bucket : bucket.slice(5);
 }
 
-export function DistributionTab({ workspacePath }: { workspacePath: string }) {
-  const [since, setSince] = useState(defaultSince);
-  const [until, setUntil] = useState(today);
-  const [granularity, setGranularity] = useState<DistributionGranularity>('day');
-  const [distribution, setDistribution] = useState<CommitDistribution | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function DistributionTab({ workspacePath, filter, reloadKey }: { workspacePath: string; filter: InsightsFilter; reloadKey: number }) {
+  const [picked, setPicked] = useState<DistributionGranularity | null>(null);
+  const granularity = picked ?? autoGranularity(filter.since);
+  const { data: distribution, error } = useBackendTool<CommitDistribution>(
+    'get_distribution',
+    // `until` = today so the chart runs right up to now, quiet days included.
+    { repoPath: workspacePath, ...filter, until: filter.since ? localDateKey(new Date()) : undefined, granularity },
+    reloadKey,
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    callBackendTool<CommitDistribution>('get_distribution', { repoPath: workspacePath, since, until, granularity })
-      .then((result) => { if (!cancelled) setDistribution(result); })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); });
-    return () => { cancelled = true; };
-  }, [workspacePath, since, until, granularity]);
+  const buckets = distribution?.buckets ?? [];
+  const every = Math.ceil(buckets.length / MAX_TICKS);
+  const total = distribution?.authors.reduce((sum, a) => sum + a.count, 0) ?? 0;
 
   return (
     <div className="git-insights-distribution">
       <div className="git-insights-distribution-controls">
-        <label className="git-insights-date-field">
-          Since
-          <input type="date" value={since} max={until} onChange={(e) => setSince(e.target.value)} />
-        </label>
-        <label className="git-insights-date-field">
-          Until
-          <input type="date" value={until} min={since} max={today()} onChange={(e) => setUntil(e.target.value)} />
-        </label>
         <div className="git-insights-granularity-toggle" role="group" aria-label="Granularity">
           {(['day', 'week', 'month'] as const).map((option) => (
             <button
               key={option}
               type="button"
               className={option === granularity ? 'git-insights-granularity-button git-insights-granularity-button--active' : 'git-insights-granularity-button'}
-              onClick={() => setGranularity(option)}
+              onClick={() => setPicked(option)}
             >
               {option}
             </button>
           ))}
         </div>
+        {distribution && <span className="git-insights-muted">{total.toLocaleString()} commits</span>}
       </div>
 
       {error && <div className="git-insights-error select-text">{error}</div>}
       {!error && !distribution && <div className="git-insights-loading">Loading commit history…</div>}
-      {distribution && (
+      {distribution && buckets.length === 0 && <div className="git-insights-muted">No commits in this range.</div>}
+      {buckets.length > 0 && (
         <>
-          <CommitDistributionChart buckets={distribution.buckets} />
+          <BarChart
+            ariaLabel={`Commits per ${granularity}`}
+            bars={buckets.map((b, i) => ({
+              label: b.bucket,
+              tick: i % every === 0 ? tickLabel(b.bucket, granularity) : undefined,
+              count: b.count,
+            }))}
+          />
+          <h4 className="git-insights-section-title git-insights-author-title">Top authors</h4>
           <ol className="git-insights-author-list">
-            {distribution.authors.slice(0, 10).map((author) => (
+            {distribution!.authors.slice(0, 10).map((author) => (
               <li key={author.author} className="git-insights-author-row select-text">
                 <span className="git-insights-author-name">{author.author}</span>
-                <span className="git-insights-author-count">{author.count}</span>
+                <span className="git-insights-author-share">
+                  <span style={{ width: `${(author.count / total) * 100}%` }} />
+                </span>
+                <span className="git-insights-author-count">
+                  {author.count.toLocaleString()} · {Math.round((author.count / total) * 100)}%
+                </span>
               </li>
             ))}
           </ol>
