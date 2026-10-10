@@ -2,9 +2,11 @@ import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { MaterialSymbol, type PanelHost, type PanelHostProps } from '@nimbalyst/extension-sdk';
 import { useBackendTool } from '../backendClient';
 import { localDateKey } from '../commitActivity';
+import type { PullStrategy } from '../gitLog';
 import { DistributionTab } from './DistributionTab';
 import { GraphTab } from './GraphTab';
 import { PrCreateButton } from './PrCreateButton';
+import { RemoteActions } from './RemoteActions';
 import { SummaryTab } from './SummaryTab';
 import { UncommittedFilesTab } from './UncommittedFilesTab';
 
@@ -63,6 +65,8 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
   const [ref, setRef] = useState('');
   const [range, setRange] = useStored<RangeId>(host, 'range', 'all');
   const [reloadKey, setReloadKey] = useState(0);
+  const [pullStrategy, setPullStrategy] = useStored<PullStrategy>(host, 'pullStrategy', 'rebase');
+  const [remoteStatus, setRemoteStatus] = useState<{ error: boolean; text: string } | null>(null);
   const workspacePath = host.workspacePath;
   const { data: branches } = useBackendTool<Branches>('get_branches', { repoPath: workspacePath }, reloadKey);
   const reload = () => setReloadKey((k) => k + 1);
@@ -163,11 +167,36 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
           </div>
         )}
 
+        <RemoteActions
+          workspacePath={workspacePath}
+          branch={branches?.current}
+          strategy={pullStrategy}
+          onStrategy={setPullStrategy}
+          onDone={(result) => {
+            setRemoteStatus(result);
+            if (!result.error) reload();
+          }}
+        />
         <button type="button" className="git-insights-icon-button" title="Refresh" aria-label="Refresh" onClick={reload}>
           <MaterialSymbol icon="refresh" size={16} />
         </button>
         <PrCreateButton workspacePath={workspacePath} branch={branches?.current} />
+        <button type="button" className="git-insights-icon-button" title="Hide panel" aria-label="Hide panel" onClick={() => host.close()}>
+          <MaterialSymbol icon="remove" size={16} />
+        </button>
       </div>
+
+      {remoteStatus && (
+        <div
+          className={`git-insights-status git-insights-remote-status select-text ${remoteStatus.error ? 'git-insights-error' : 'git-insights-muted'}`}
+          role="status"
+        >
+          {remoteStatus.text}
+          <button type="button" className="git-insights-icon-button" aria-label="Dismiss" onClick={() => setRemoteStatus(null)}>
+            <MaterialSymbol icon="close" size={16} />
+          </button>
+        </div>
+      )}
 
       <div className="git-insights-content" role="tabpanel" id={`${idBase}-panel`} aria-labelledby={tabId(activeTab)}>
         {activeTab === 'graph' && (

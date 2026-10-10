@@ -170,6 +170,52 @@
   background: var(--nim-bg-hover);
 }
 
+/* Push / Pull▾ / Fetch */
+.git-insights-remote {
+  display: flex;
+  gap: 4px;
+}
+
+.git-insights-remote .git-insights-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.git-insights-split {
+  position: relative;
+  display: flex;
+}
+
+.git-insights-split > .git-insights-button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.git-insights-split > .git-insights-button:nth-child(2) {
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  padding: 3px 2px;
+}
+
+.git-insights-menu.git-insights-split-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+}
+
+.git-insights-split-menu .git-insights-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.git-insights-status.git-insights-remote-status {
+  margin: 0;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--nim-border);
+}
+
 .git-insights-button--primary,
 .git-insights-button--primary:hover {
   background: var(--nim-primary);
@@ -418,6 +464,47 @@
   font-size: 10px;
   text-align: center;
   color: var(--nim-text-faint);
+}
+
+/* Graph search: sticks to the top of the scrolling list. */
+.git-insights-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--nim-bg-secondary, var(--nim-bg));
+  border: 1px solid var(--nim-border);
+  border-radius: 6px;
+}
+
+.git-insights-search-icon {
+  color: var(--nim-text-faint);
+}
+
+.git-insights-search-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--nim-text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.git-insights-search-input:focus-visible {
+  outline: none;
+}
+
+.git-insights-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.git-insights-search:focus-within {
+  border-color: var(--nim-border-focus);
 }
 
 /* Graph: list + detail pane */

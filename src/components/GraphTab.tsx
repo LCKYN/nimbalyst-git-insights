@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { createPortal } from 'react-dom';
 import { copyToClipboard, MaterialSymbol, type PanelHost } from '@nimbalyst/extension-sdk';
 import { callBackendTool, useBackendTool } from '../backendClient';
-import type { CommitGraph, GraphCommit } from '../commitGraph';
+import { commitMatches, type CommitGraph, type GraphCommit } from '../commitGraph';
 import type { CommitAction } from '../gitLog';
 import { CommitDetail } from './CommitDetail';
 import type { Branches, InsightsFilter } from './GitInsightsPanel';
@@ -51,6 +51,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
   const [selected, setSelected] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: GraphCommit } | null>(null);
   const [status, setStatus] = useState<{ error: boolean; text: string } | null>(null);
+  const [query, setQuery] = useState('');
   const listRef = useRef<HTMLOListElement>(null);
   const optionIdBase = useId();
   const optionId = (hash: string) => `${optionIdBase}-${hash}`;
@@ -86,10 +87,12 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
   }
 
   const graphWidth = Math.max(1, graph.laneCount) * LANE_WIDTH;
+  // Searching shows matches as a flat list: lane lines between non-adjacent rows would be wrong.
+  const searching = query.trim() !== '';
+  const rows = searching ? graph.rows.filter((row) => commitMatches(row.commit, query)) : graph.rows;
 
   // The list is one tab stop; arrows move the selection (and the detail pane) instead of focus.
   const onListKeyDown = (e: KeyboardEvent<HTMLOListElement>) => {
-    const rows = graph.rows;
     if (rows.length === 0) return;
     const current = rows.findIndex((r) => r.commit.hash === selected);
     if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
@@ -121,6 +124,26 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
   return (
     <div className="git-insights-graph-layout">
       <div className="git-insights-graph-scroll">
+        <div className="git-insights-search">
+          <MaterialSymbol icon="search" size={16} className="git-insights-search-icon" />
+          <input
+            className="git-insights-search-input"
+            type="search"
+            placeholder="Search commits by message, author, or hash"
+            aria-label="Search commits"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            spellCheck={false}
+          />
+          {searching && (
+            <>
+              <span className="git-insights-muted">{rows.length} of {graph.rows.length} loaded</span>
+              <button type="button" className="git-insights-icon-button" aria-label="Clear search" onClick={() => setQuery('')}>
+                <MaterialSymbol icon="close" size={16} />
+              </button>
+            </>
+          )}
+        </div>
         {error && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
         {status && (
           <div className={status.error ? 'git-insights-error git-insights-status select-text' : 'git-insights-muted git-insights-status select-text'}>
@@ -131,8 +154,11 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
           </div>
         )}
         {graph.rows.length === 0 && <div className="git-insights-muted">No commits match this filter.</div>}
+        {searching && graph.rows.length > 0 && rows.length === 0 && (
+          <div className="git-insights-muted">No loaded commits match “{query.trim()}”.</div>
+        )}
         <div className="git-insights-graph">
-          <svg
+          {!searching && <svg
             className="git-insights-graph-svg"
             width={graphWidth}
             height={graph.rows.length * ROW_HEIGHT}
@@ -168,19 +194,19 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
                 strokeWidth={2}
               />
             ))}
-          </svg>
+          </svg>}
 
           <ol
             ref={listRef}
             className="git-insights-graph-rows"
-            style={{ marginLeft: graphWidth + 8 }}
+            style={{ marginLeft: searching ? 0 : graphWidth + 8 }}
             tabIndex={0}
             role="listbox"
             aria-label="Commits"
             aria-activedescendant={selected ? optionId(selected) : undefined}
             onKeyDown={onListKeyDown}
           >
-            {graph.rows.map((row) => (
+            {rows.map((row) => (
               <li
                 key={row.commit.hash}
                 id={optionId(row.commit.hash)}

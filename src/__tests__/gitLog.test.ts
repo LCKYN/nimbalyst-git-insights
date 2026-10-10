@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commitActionArgs, parseGitLogOutput } from '../gitLog';
+import { commitActionArgs, parseGitLogOutput, remoteActionArgs } from '../gitLog';
 
 const RS = '\x1e';
 const US = '\x1f';
@@ -43,5 +43,22 @@ describe('commitActionArgs', () => {
     expect(() => commitActionArgs('create_branch', hash, '--output=/tmp/x')).toThrow();
     expect(() => commitActionArgs('create_tag', hash, '')).toThrow();
     expect(() => commitActionArgs('cherry_pick', '--abort')).toThrow();
+  });
+});
+
+describe('remoteActionArgs', () => {
+  it('pushes to the upstream, or publishes to origin when there is none', () => {
+    expect(remoteActionArgs('push', { hasUpstream: true })).toEqual(['push']);
+    expect(remoteActionArgs('push')).toEqual(['push', '-u', 'origin', 'HEAD']);
+  });
+
+  it('maps each pull strategy to an explicit flag, defaulting to rebase', () => {
+    expect(remoteActionArgs('pull')).toEqual(['pull', '--rebase']);
+    expect(remoteActionArgs('pull', { strategy: 'merge' })).toEqual(['pull', '--no-rebase']);
+    expect(remoteActionArgs('pull', { strategy: 'ff-only' })).toEqual(['pull', '--ff-only']);
+  });
+
+  it('rejects unknown actions', () => {
+    expect(() => remoteActionArgs('reset' as never)).toThrow('Unknown remote action');
   });
 });

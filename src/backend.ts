@@ -8,7 +8,18 @@
  */
 import { aggregateDistribution, aggregateSummary, type DistributionGranularity } from './commitActivity';
 import { DETAIL_LOG_FORMAT, GRAPH_LOG_FORMAT, layoutGraph, parseCommitDetail, parseGraphLogOutput } from './commitGraph';
-import { assertHash, commitActionArgs, parseGitLogOutput, revisionArgs, runGit, runGitLog, type CommitAction } from './gitLog';
+import {
+  assertHash,
+  commitActionArgs,
+  parseGitLogOutput,
+  remoteActionArgs,
+  revisionArgs,
+  runGit,
+  runGitLog,
+  type CommitAction,
+  type PullStrategy,
+  type RemoteAction,
+} from './gitLog';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseNumstatZ, parseStatusPorcelain, type WorkingChange } from './workingChanges';
@@ -79,6 +90,19 @@ const TOOL_DESCRIPTORS = [
         name: { type: 'string' },
       },
       required: ['hash', 'action'],
+    },
+  },
+  {
+    name: 'remote_action',
+    description: 'Push the current branch, pull it (rebase/merge/ff-only), or fetch.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repoPath: { type: 'string' },
+        action: { type: 'string', enum: ['push', 'pull', 'fetch'] },
+        strategy: { type: 'string', enum: ['rebase', 'merge', 'ff-only'] },
+      },
+      required: ['action'],
     },
   },
   {
@@ -195,6 +219,18 @@ export async function activate(ctx: ActivateCtx) {
         log('info', `[git-insights] git ${args.join(' ')}`);
         const output = await runGit(cwd, args);
         return { output: output.trim() };
+      },
+
+      remote_action: async (params: { repoPath?: string; action: RemoteAction; strategy?: PullStrategy }) => {
+        const cwd = params?.repoPath || workspacePath;
+        let hasUpstream = false;
+        if (params?.action === 'push') {
+          hasUpstream = await runGit(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).then(() => true, () => false);
+        }
+        const args = remoteActionArgs(params?.action, { strategy: params?.strategy, hasUpstream });
+        log('info', `[git-insights] git ${args.join(' ')}`);
+        await runGit(cwd, args);
+        return { ok: true };
       },
 
       get_working_changes: async (params: { repoPath?: string }) => {

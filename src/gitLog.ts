@@ -60,10 +60,33 @@ export function commitActionArgs(action: CommitAction, hash: string, name?: stri
   }
 }
 
+export type RemoteAction = 'push' | 'pull' | 'fetch';
+export type PullStrategy = 'rebase' | 'merge' | 'ff-only';
+
+const PULL_FLAG: Record<PullStrategy, string> = { rebase: '--rebase', merge: '--no-rebase', 'ff-only': '--ff-only' };
+
+/**
+ * git argv for a toolbar remote action. Push without an upstream publishes the
+ * current branch to origin under the same name (as `create_pr` does).
+ */
+export function remoteActionArgs(action: RemoteAction, opts: { strategy?: PullStrategy; hasUpstream?: boolean } = {}): string[] {
+  switch (action) {
+    case 'push':
+      return opts.hasUpstream ? ['push'] : ['push', '-u', 'origin', 'HEAD'];
+    case 'pull':
+      return ['pull', PULL_FLAG[opts.strategy ?? 'rebase'] ?? '--rebase'];
+    case 'fetch':
+      return ['fetch', '--prune'];
+    default:
+      throw new Error(`Unknown remote action: ${String(action)}`);
+  }
+}
+
 /** `okCodes`: exit codes that still count as success (`git diff --no-index` exits 1 when files differ). */
 export function runGit(cwd: string, args: string[], okCodes: number[] = [0]): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('git', args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    // GIT_TERMINAL_PROMPT=0: a push/pull needing credentials fails fast instead of hanging on a prompt nobody sees.
+    const child = spawn('git', args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });

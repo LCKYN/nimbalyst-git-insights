@@ -33,6 +33,17 @@ export interface CommitGraph {
   laneCount: number;
 }
 
+/** Search box match, same rules as the built-in Git panel: subject or author contains, hash starts with. */
+export function commitMatches(commit: GraphCommit, query: string): boolean {
+  const q = query.trim().toLocaleLowerCase();
+  return (
+    !q ||
+    commit.subject.toLocaleLowerCase().includes(q) ||
+    commit.author.toLocaleLowerCase().includes(q) ||
+    commit.hash.toLocaleLowerCase().startsWith(q)
+  );
+}
+
 export function parseGraphLogOutput(raw: string): GraphCommit[] {
   return raw
     .split(RECORD_SEPARATOR)
