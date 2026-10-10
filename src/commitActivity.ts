@@ -65,6 +65,39 @@ export function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/**
+ * Sunday-first week columns covering `weeks` weeks, the last one being `today`'s
+ * week. Days after `today` are omitted, so the last column may be partial.
+ */
+export function heatmapGrid(today: Date, weeks: number): { date: Date; key: string }[][] {
+  const cursor = new Date(today);
+  cursor.setHours(0, 0, 0, 0);
+  const todayKey = localDateKey(cursor);
+  cursor.setDate(cursor.getDate() - (weeks - 1) * 7 - cursor.getDay());
+
+  const grid: { date: Date; key: string }[][] = [];
+  for (let w = 0; w < weeks; w++) {
+    const column: { date: Date; key: string }[] = [];
+    for (let d = 0; d < 7; d++) {
+      const key = localDateKey(cursor);
+      if (key <= todayKey) column.push({ date: new Date(cursor), key });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    grid.push(column);
+  }
+  return grid;
+}
+
+/**
+ * Heatmap width in weeks for a toolbar range id. 0 hides it: at 7d/30d a sliver
+ * of cells says less than the day-of-week and hour charts beside it.
+ */
+export function heatmapWeeks(range: string): number {
+  if (range === '90d') return 13;
+  if (range === '1y' || range === 'all') return 53;
+  return 0;
+}
+
 function sortedCounts(counts: Map<string, number>): AuthorCount[] {
   return [...counts.entries()]
     .map(([author, count]) => ({ author, count }))

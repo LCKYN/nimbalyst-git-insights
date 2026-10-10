@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { copyToClipboard, type PanelHost } from '@nimbalyst/extension-sdk';
+import { copyToClipboard, MaterialSymbol, type PanelHost } from '@nimbalyst/extension-sdk';
 import { callBackendTool, useBackendTool } from '../backendClient';
 import type { CommitGraph, GraphCommit } from '../commitGraph';
 import type { CommitAction } from '../gitLog';
@@ -11,8 +11,11 @@ const ROW_HEIGHT = 26;
 const LANE_WIDTH = 14;
 const DOT_RADIUS = 4;
 
-/** Categorical lane colors, cycled by lane slot. */
-const LANE_COLORS = ['#3b82f6', '#ec4899', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4', '#ef4444', '#eab308'];
+/**
+ * Categorical lane colors, cycled by lane slot. No red (reads as "deleted") or
+ * yellow (unreadable on light themes); lane colors only ever draw lines and borders.
+ */
+const LANE_COLORS = ['#3b82f6', '#ec4899', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4'];
 
 const PAGE = 300;
 const MAX_COMMITS = 2000; // backend cap
@@ -49,13 +52,21 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
   const [menu, setMenu] = useState<{ x: number; y: number; commit: GraphCommit } | null>(null);
   const [status, setStatus] = useState<{ error: boolean; text: string } | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
+  const optionIdBase = useId();
+  const optionId = (hash: string) => `${optionIdBase}-${hash}`;
 
   useEffect(() => {
     if (selected) listRef.current?.querySelector(`[data-hash="${selected}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [selected]);
 
-  const runAction = async (commit: GraphCommit, action: CommitAction, name?: string) => {
+  /** Closes the commit menu; Escape and actions hand focus back to the list, outside clicks don't. */
+  const closeMenu = (refocus: boolean) => {
     setMenu(null);
+    if (refocus) listRef.current?.focus();
+  };
+
+  const runAction = async (commit: GraphCommit, action: CommitAction, name?: string) => {
+    closeMenu(true);
     if (CONFIRM[action] && !window.confirm(`${CONFIRM[action]} ${commit.hash.slice(0, 7)} "${commit.subject}"?`)) return;
     setStatus(null);
     try {
@@ -67,7 +78,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
     }
   };
 
-  if (error) {
+  if (error && !graph) {
     return <div className="git-insights-error select-text">{error}</div>;
   }
   if (!graph) {
@@ -76,13 +87,47 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
 
   const graphWidth = Math.max(1, graph.laneCount) * LANE_WIDTH;
 
+  // The list is one tab stop; arrows move the selection (and the detail pane) instead of focus.
+  const onListKeyDown = (e: KeyboardEvent<HTMLOListElement>) => {
+    const rows = graph.rows;
+    if (rows.length === 0) return;
+    const current = rows.findIndex((r) => r.commit.hash === selected);
+    if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
+      e.preventDefault();
+      const row = current >= 0 ? listRef.current?.querySelector(`[data-hash="${selected}"]`) : null;
+      if (!row) return;
+      const rect = row.getBoundingClientRect();
+      setMenu({ x: rect.left + 16, y: rect.bottom, commit: rows[current].commit });
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (selected) {
+        e.preventDefault();
+        setSelected(null);
+      }
+      return;
+    }
+    const target = ({
+      ArrowDown: current < 0 ? 0 : current + 1,
+      ArrowUp: current < 0 ? 0 : current - 1,
+      Home: 0,
+      End: rows.length - 1,
+    } as Record<string, number>)[e.key];
+    if (target === undefined) return;
+    e.preventDefault();
+    setSelected(rows[Math.max(0, Math.min(rows.length - 1, target))].commit.hash);
+  };
+
   return (
     <div className="git-insights-graph-layout">
       <div className="git-insights-graph-scroll">
+        {error && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
         {status && (
           <div className={status.error ? 'git-insights-error git-insights-status select-text' : 'git-insights-muted git-insights-status select-text'}>
             {status.text}
-            <button type="button" className="git-insights-icon-button" aria-label="Dismiss" onClick={() => setStatus(null)}>×</button>
+            <button type="button" className="git-insights-icon-button" aria-label="Dismiss" onClick={() => setStatus(null)}>
+              <MaterialSymbol icon="close" size={16} />
+            </button>
           </div>
         )}
         {graph.rows.length === 0 && <div className="git-insights-muted">No commits match this filter.</div>}
@@ -125,10 +170,22 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
             ))}
           </svg>
 
-          <ol ref={listRef} className="git-insights-graph-rows" style={{ marginLeft: graphWidth + 8 }}>
+          <ol
+            ref={listRef}
+            className="git-insights-graph-rows"
+            style={{ marginLeft: graphWidth + 8 }}
+            tabIndex={0}
+            role="listbox"
+            aria-label="Commits"
+            aria-activedescendant={selected ? optionId(selected) : undefined}
+            onKeyDown={onListKeyDown}
+          >
             {graph.rows.map((row) => (
               <li
                 key={row.commit.hash}
+                id={optionId(row.commit.hash)}
+                role="option"
+                aria-selected={row.commit.hash === selected}
                 data-hash={row.commit.hash}
                 className={row.commit.hash === selected ? 'git-insights-graph-row git-insights-graph-row--selected' : 'git-insights-graph-row'}
                 style={{ height: ROW_HEIGHT }}
@@ -143,7 +200,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
                   <span
                     key={ref}
                     className="git-insights-graph-ref"
-                    style={{ borderColor: laneColor(row.lane), color: laneColor(row.lane) }}
+                    style={{ borderColor: laneColor(row.lane) }}
                   >
                     {ref.replace(/^HEAD -> /, '')}
                   </span>
@@ -157,7 +214,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
           </ol>
         </div>
         {graph.rows.length >= limit && limit < MAX_COMMITS && (
-          <button type="button" className="git-insights-granularity-button git-insights-load-more" disabled={loading} onClick={() => setLimit((l) => l + PAGE)}>
+          <button type="button" className="git-insights-button git-insights-load-more" disabled={loading} onClick={() => setLimit((l) => l + PAGE)}>
             {loading ? 'Loading…' : `Load ${PAGE} more`}
           </button>
         )}
@@ -180,7 +237,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
           commit={menu.commit}
           localBranches={branches?.local ?? []}
           onAction={(action, name) => runAction(menu.commit, action, name)}
-          onClose={() => setMenu(null)}
+          onClose={closeMenu}
         />
       )}
     </div>
@@ -207,7 +264,7 @@ interface MenuProps {
   commit: GraphCommit;
   localBranches: string[];
   onAction: (action: CommitAction, name?: string) => void;
-  onClose: () => void;
+  onClose: (refocus: boolean) => void;
 }
 
 /** Right-click menu for a graph row. Portaled to <body> for the same reason as the tooltip. */
@@ -228,17 +285,33 @@ function CommitMenu({ x, y, commit, localBranches, onAction, onClose }: MenuProp
   }, [x, y, naming]);
 
   useEffect(() => {
-    const onDown = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onDown = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(false); };
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose(true); };
+    const onBlur = () => onClose(false);
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
-    window.addEventListener('blur', onClose);
+    window.addEventListener('blur', onBlur);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
-      window.removeEventListener('blur', onClose);
+      window.removeEventListener('blur', onBlur);
     };
   }, [onClose]);
+
+  // Keyboard users land on the first item; the naming form's input autofocuses itself.
+  useEffect(() => {
+    if (!naming) ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+  }, [naming]);
+
+  const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+    if (items.length === 0) return;
+    e.preventDefault();
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    const next = e.key === 'ArrowDown' ? current + 1 : current - 1;
+    items[(next + items.length) % items.length].focus();
+  };
 
   const branchesHere = commit.refs
     .map((r) => r.replace(/^HEAD -> /, ''))
@@ -248,7 +321,7 @@ function CommitMenu({ x, y, commit, localBranches, onAction, onClose }: MenuProp
   );
 
   return createPortal(
-    <div ref={ref} className="git-insights-menu" role="menu" style={{ left: pos.x, top: pos.y }}>
+    <div ref={ref} className="git-insights-menu" role="menu" style={{ left: pos.x, top: pos.y }} onKeyDown={onMenuKeyDown}>
       {naming ? (
         <form
           className="git-insights-menu-form"
@@ -262,12 +335,12 @@ function CommitMenu({ x, y, commit, localBranches, onAction, onClose }: MenuProp
             {commit.hash.slice(0, 7)}
             <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="name" />
           </label>
-          <button type="submit" className="git-insights-pr-create-button" disabled={!name.trim()}>Create</button>
+          <button type="submit" className="git-insights-button git-insights-button--primary" disabled={!name.trim()}>Create</button>
         </form>
       ) : (
         <>
-          {item('Copy commit hash', () => { copyToClipboard(commit.hash); onClose(); })}
-          {item('Copy commit message', () => { copyToClipboard(commit.subject); onClose(); })}
+          {item('Copy commit hash', () => { copyToClipboard(commit.hash); onClose(true); })}
+          {item('Copy commit message', () => { copyToClipboard(commit.subject); onClose(true); })}
           <hr />
           {branchesHere.map((b) => item(`Checkout ${b}`, () => onAction('checkout', b)))}
           {item('Checkout commit (detached)', () => onAction('checkout'))}

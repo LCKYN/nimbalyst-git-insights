@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { PanelHost, PanelHostProps } from '@nimbalyst/extension-sdk';
+import { useEffect, useId, useState, type KeyboardEvent } from 'react';
+import { MaterialSymbol, type PanelHost, type PanelHostProps } from '@nimbalyst/extension-sdk';
 import { useBackendTool } from '../backendClient';
 import { localDateKey } from '../commitActivity';
 import { DistributionTab } from './DistributionTab';
@@ -66,6 +66,19 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
   const workspacePath = host.workspacePath;
   const { data: branches } = useBackendTool<Branches>('get_branches', { repoPath: workspacePath }, reloadKey);
   const reload = () => setReloadKey((k) => k + 1);
+  const idBase = useId();
+  const tabId = (id: TabId) => `${idBase}-tab-${id}`;
+
+  // Roving tabindex: only the active tab is a tab stop; arrows/Home/End move and activate.
+  const onTabKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const current = TABS.findIndex((t) => t.id === activeTab);
+    const target = ({ ArrowLeft: current - 1, ArrowRight: current + 1, Home: 0, End: TABS.length - 1 } as Record<string, number>)[e.key];
+    if (target === undefined) return;
+    e.preventDefault();
+    const next = (target + TABS.length) % TABS.length;
+    setActiveTab(TABS[next].id);
+    e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
+  };
 
   // Commits, checkouts and edits all fire this; bursts collapse into one reload.
   useEffect(() => {
@@ -91,16 +104,20 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
       <div className="git-insights-toolbar">
         {branches && (
           <span className="git-insights-branch select-text" title="Current branch">
-            ⎇ {branches.current || 'detached HEAD'}
+            <span aria-hidden="true"><MaterialSymbol icon="call_split" size={16} /></span>
+            <span className="git-insights-branch-name">{branches.current || 'detached HEAD'}</span>
           </span>
         )}
-        <div className="git-insights-tabs" role="tablist">
+        <div className="git-insights-tabs" role="tablist" aria-label="Git Insights views" onKeyDown={onTabKeyDown}>
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               role="tab"
+              id={tabId(tab.id)}
               aria-selected={activeTab === tab.id}
+              aria-controls={`${idBase}-panel`}
+              tabIndex={activeTab === tab.id ? 0 : -1}
               className={activeTab === tab.id ? 'git-insights-tab git-insights-tab--active' : 'git-insights-tab'}
               onClick={() => setActiveTab(tab.id)}
             >
@@ -131,12 +148,12 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
                 </optgroup>
               )}
             </select>
-            <div className="git-insights-granularity-toggle" role="group" aria-label="Date range">
+            <div className="git-insights-segmented" role="group" aria-label="Date range">
               {RANGES.map((r) => (
                 <button
                   key={r.id}
                   type="button"
-                  className={r.id === range ? 'git-insights-granularity-button git-insights-granularity-button--active' : 'git-insights-granularity-button'}
+                  className={r.id === range ? 'git-insights-segmented-button git-insights-segmented-button--active' : 'git-insights-segmented-button'}
                   onClick={() => setRange(r.id)}
                 >
                   {r.label}
@@ -146,11 +163,13 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
           </div>
         )}
 
-        <button type="button" className="git-insights-icon-button" title="Refresh" aria-label="Refresh" onClick={reload}>⟳</button>
+        <button type="button" className="git-insights-icon-button" title="Refresh" aria-label="Refresh" onClick={reload}>
+          <MaterialSymbol icon="refresh" size={16} />
+        </button>
         <PrCreateButton workspacePath={workspacePath} branch={branches?.current} />
       </div>
 
-      <div className="git-insights-content">
+      <div className="git-insights-content" role="tabpanel" id={`${idBase}-panel`} aria-labelledby={tabId(activeTab)}>
         {activeTab === 'graph' && (
           <GraphTab
             host={host}
@@ -161,7 +180,7 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
             onRepoChanged={reload}
           />
         )}
-        {activeTab === 'summary' && <SummaryTab workspacePath={workspacePath} filter={filter} reloadKey={reloadKey} />}
+        {activeTab === 'summary' && <SummaryTab workspacePath={workspacePath} filter={filter} range={range} reloadKey={reloadKey} />}
         {/* Keyed by range so a manual granularity pick resets to auto when the range changes. */}
         {activeTab === 'distribution' && <DistributionTab key={range} workspacePath={workspacePath} filter={filter} reloadKey={reloadKey} />}
         {activeTab === 'uncommitted' && <UncommittedFilesTab host={host} workspacePath={workspacePath} reloadKey={reloadKey} />}

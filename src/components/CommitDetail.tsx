@@ -1,4 +1,4 @@
-import { copyToClipboard, type PanelHost } from '@nimbalyst/extension-sdk';
+import { copyToClipboard, MaterialSymbol, type PanelHost } from '@nimbalyst/extension-sdk';
 import { useBackendTool } from '../backendClient';
 import type { CommitDetail as CommitDetailData } from '../commitGraph';
 
@@ -22,10 +22,13 @@ export function CommitDetail({ host, workspacePath, hash, onSelect, onClose }: P
     <aside className="git-insights-detail">
       <div className="git-insights-detail-header">
         <strong className="select-text">{detail?.subject ?? hash.slice(0, 7)}</strong>
-        <button type="button" className="git-insights-icon-button" aria-label="Close details" onClick={onClose}>×</button>
+        <button type="button" className="git-insights-icon-button" aria-label="Close details" onClick={onClose}>
+          <MaterialSymbol icon="close" size={16} />
+        </button>
       </div>
 
-      {error && <div className="git-insights-error select-text">{error}</div>}
+      {error && !detail && <div className="git-insights-error select-text">{error}</div>}
+      {error && detail && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
       {!error && !detail && <div className="git-insights-loading">Loading commit…</div>}
       {detail && (
         <>

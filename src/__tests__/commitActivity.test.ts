@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateDistribution, aggregateSummary, parseAuthorDateDay, type RawCommit } from '../commitActivity';
+import { aggregateDistribution, aggregateSummary, heatmapGrid, heatmapWeeks, parseAuthorDateDay, type RawCommit } from '../commitActivity';
+
+describe('heatmapGrid', () => {
+  it('starts on a Sunday and ends on today, in a partial last column', () => {
+    const grid = heatmapGrid(new Date(2026, 9, 9, 15, 30), 53); // Fri 2026-10-09
+    expect(grid).toHaveLength(53);
+    expect(grid[0][0].date.getDay()).toBe(0);
+    expect(grid[0][0].key).toBe('2025-10-05');
+    expect(grid.at(-1)!.map((c) => c.key)).toEqual(['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09']);
+  });
+});
+
+describe('heatmapWeeks', () => {
+  it('shrinks to the range and hides below 90 days', () => {
+    expect(['7d', '30d', '90d', '1y', 'all'].map(heatmapWeeks)).toEqual([0, 0, 13, 53, 53]);
+  });
+
+  it('gives a 13-week grid that still spans parts of 3+ months', () => {
+    const grid = heatmapGrid(new Date(2026, 9, 9), heatmapWeeks('90d'));
+    expect(grid).toHaveLength(13);
+    expect(new Set(grid.map((column) => column[0].date.getMonth())).size).toBeGreaterThanOrEqual(3);
+  });
+});
 
 describe('parseAuthorDateDay', () => {
   it('takes the literal date prefix, not a UTC-converted date', () => {

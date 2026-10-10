@@ -1,15 +1,15 @@
 import { useBackendTool } from '../backendClient';
-import type { CommitSummary } from '../commitActivity';
+import { heatmapWeeks, type CommitSummary } from '../commitActivity';
 import { BarChart } from './BarChart';
 import type { InsightsFilter } from './GitInsightsPanel';
 import { HeatmapCalendar } from './HeatmapCalendar';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export function SummaryTab({ workspacePath, filter, reloadKey }: { workspacePath: string; filter: InsightsFilter; reloadKey: number }) {
+export function SummaryTab({ workspacePath, filter, range, reloadKey }: { workspacePath: string; filter: InsightsFilter; range: string; reloadKey: number }) {
   const { data, error } = useBackendTool<CommitSummary>('get_summary', { repoPath: workspacePath, ...filter }, reloadKey);
 
-  if (error) {
+  if (error && !data) {
     return <div className="git-insights-error select-text">{error}</div>;
   }
   if (!data) {
@@ -18,21 +18,23 @@ export function SummaryTab({ workspacePath, filter, reloadKey }: { workspacePath
 
   const busiestDay = data.weekdays.indexOf(Math.max(...data.weekdays));
   const busiestHour = data.hours.indexOf(Math.max(...data.hours));
+  const weeks = heatmapWeeks(range);
 
   return (
     <div className="git-insights-summary">
+      {error && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
       <div className="git-insights-summary-stats select-text">
         <span><strong>{data.total.toLocaleString()}</strong> commits</span>
         <span><strong>{data.days.length.toLocaleString()}</strong> active days</span>
         {data.total > 0 && (
           <>
-            <span>busiest day <strong>{WEEKDAYS[busiestDay]}</strong></span>
-            <span>busiest hour <strong>{String(busiestHour).padStart(2, '0')}:00</strong></span>
+            <span><strong>{WEEKDAYS[busiestDay]}</strong> busiest day</span>
+            <span><strong>{String(busiestHour).padStart(2, '0')}:00</strong> busiest hour</span>
           </>
         )}
       </div>
 
-      <HeatmapCalendar days={data.days} />
+      {weeks > 0 && <HeatmapCalendar days={data.days} weeks={weeks} />}
 
       <div className="git-insights-summary-charts">
         <section>

@@ -34,12 +34,12 @@ export function DistributionTab({ workspacePath, filter, reloadKey }: { workspac
   return (
     <div className="git-insights-distribution">
       <div className="git-insights-distribution-controls">
-        <div className="git-insights-granularity-toggle" role="group" aria-label="Granularity">
+        <div className="git-insights-segmented" role="group" aria-label="Granularity">
           {(['day', 'week', 'month'] as const).map((option) => (
             <button
               key={option}
               type="button"
-              className={option === granularity ? 'git-insights-granularity-button git-insights-granularity-button--active' : 'git-insights-granularity-button'}
+              className={option === granularity ? 'git-insights-segmented-button git-insights-segmented-button--active' : 'git-insights-segmented-button'}
               onClick={() => setPicked(option)}
             >
               {option}
@@ -49,7 +49,8 @@ export function DistributionTab({ workspacePath, filter, reloadKey }: { workspac
         {distribution && <span className="git-insights-muted">{total.toLocaleString()} commits</span>}
       </div>
 
-      {error && <div className="git-insights-error select-text">{error}</div>}
+      {error && !distribution && <div className="git-insights-error select-text">{error}</div>}
+      {error && distribution && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
       {!error && !distribution && <div className="git-insights-loading">Loading commit history…</div>}
       {distribution && buckets.length === 0 && <div className="git-insights-muted">No commits in this range.</div>}
       {buckets.length > 0 && (

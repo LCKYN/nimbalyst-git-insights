@@ -24,11 +24,15 @@ export async function callBackendTool<T>(toolName: string, args?: Record<string,
 /**
  * Calls a backend tool whenever `args` (compared by value) or `reloadKey` change.
  * Keeps the previous `data` while a reload is in flight so filters don't flash.
+ * On error, keeps `data` if it came from the same args (a failed reload), so
+ * views can show the error above the last good result; drops it if the args
+ * changed, since data for a different filter would be wrong.
  */
 export function useBackendTool<T>(toolName: string, args: Record<string, unknown>, reloadKey = 0) {
   const argsKey = JSON.stringify(args);
-  const [state, setState] = useState<{ data: T | null; error: string | null; loading: boolean }>({
+  const [state, setState] = useState<{ data: T | null; dataKey: string | null; error: string | null; loading: boolean }>({
     data: null,
+    dataKey: null,
     error: null,
     loading: true,
   });
@@ -37,12 +41,16 @@ export function useBackendTool<T>(toolName: string, args: Record<string, unknown
     let cancelled = false;
     setState((prev) => ({ ...prev, error: null, loading: true }));
     callBackendTool<T>(toolName, JSON.parse(argsKey))
-      .then((data) => { if (!cancelled) setState({ data, error: null, loading: false }); })
+      .then((data) => { if (!cancelled) setState({ data, dataKey: argsKey, error: null, loading: false }); })
       .catch((err) => {
-        if (!cancelled) setState({ data: null, error: err instanceof Error ? err.message : String(err), loading: false });
+        if (cancelled) return;
+        const error = err instanceof Error ? err.message : String(err);
+        setState((prev) =>
+          prev.dataKey === argsKey ? { ...prev, error, loading: false } : { data: null, dataKey: null, error, loading: false },
+        );
       });
     return () => { cancelled = true; };
   }, [toolName, argsKey, reloadKey]);
 
-  return state;
+  return { data: state.data, error: state.error, loading: state.loading };
 }

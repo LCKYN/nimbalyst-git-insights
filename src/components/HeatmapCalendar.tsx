@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
-import { localDateKey, type HeatmapDay } from '../commitActivity';
+import { heatmapGrid, type HeatmapDay } from '../commitActivity';
 import { useTooltip } from './Tooltip';
 
 const CELL_SIZE = 11;
 const CELL_GAP = 3;
-const WEEKS = 53;
 const DAYS_PER_WEEK = 7;
 
 /** Sequential magnitude encoding: one hue, light -> dark, per dataviz guidance. */
@@ -26,31 +25,14 @@ const TOP = 14;
 /** Rows 1/3/5 of a Sunday-first week. */
 const WEEKDAY_LABELS: [number, string][] = [[1, 'Mon'], [3, 'Wed'], [5, 'Fri']];
 
-/** GitHub-style 53x7 contribution grid, ending today, one column per week. */
-export function HeatmapCalendar({ days }: { days: HeatmapDay[] }) {
+/** GitHub-style contribution grid, `weeks` columns ending today, one column per week. */
+export function HeatmapCalendar({ days, weeks: weekCount }: { days: HeatmapDay[]; weeks: number }) {
   const tooltip = useTooltip();
   const dayByDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
   const maxCount = useMemo(() => days.reduce((max, d) => Math.max(max, d.count), 0), [days]);
 
-  const weeks = useMemo(() => {
-    const cursor = new Date();
-    cursor.setHours(0, 0, 0, 0);
-    // Start on the Sunday at or before (WEEKS * 7 - 1) days ago, so the grid's
-    // rightmost column ends on today's week.
-    cursor.setDate(cursor.getDate() - (WEEKS * DAYS_PER_WEEK - 1) - cursor.getDay());
-
-    const grid: { date: Date; key: string }[][] = [];
-    for (let w = 0; w < WEEKS; w++) {
-      const column: { date: Date; key: string }[] = [];
-      for (let d = 0; d < DAYS_PER_WEEK; d++) {
-        column.push({ date: new Date(cursor), key: localDateKey(cursor) });
-        cursor.setDate(cursor.getDate() + 1);
-      }
-      grid.push(column);
-    }
-    return grid;
-    // `days` changes on every reload, which also rolls the grid over past midnight.
-  }, [days]);
+  // `days` changes on every reload, which also rolls the grid over past midnight.
+  const weeks = useMemo(() => heatmapGrid(new Date(), weekCount), [days, weekCount]);
 
   // A month label sits over the first week that starts in that month; skip one
   // that would collide with the next (the partial first column).
@@ -60,7 +42,7 @@ export function HeatmapCalendar({ days }: { days: HeatmapDay[] }) {
       : [],
   ).filter((m, i, all) => !all[i + 1] || all[i + 1].week - m.week >= 3);
 
-  const width = LEFT + WEEKS * (CELL_SIZE + CELL_GAP);
+  const width = LEFT + weekCount * (CELL_SIZE + CELL_GAP);
   const height = TOP + DAYS_PER_WEEK * (CELL_SIZE + CELL_GAP);
 
   return (

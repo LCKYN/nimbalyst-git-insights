@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { PanelHost } from '@nimbalyst/extension-sdk';
+import { MaterialSymbol, type PanelHost } from '@nimbalyst/extension-sdk';
 import { useBackendTool } from '../backendClient';
 import { useSessionsForFile } from '../hooks/useSessionsForFile';
 import { parseUnifiedDiff, type ChangeStatus, type WorkingChange } from '../workingChanges';
@@ -40,7 +40,7 @@ function DiffView({ workspacePath, file, reloadKey }: { workspacePath: string; f
     reloadKey,
   );
 
-  if (error) return <div className="git-insights-error select-text">{error}</div>;
+  if (error && !data) return <div className="git-insights-error select-text">{error}</div>;
   if (!data) return <div className="git-insights-loading">Loading diff…</div>;
 
   const lines = parseUnifiedDiff(data.diff);
@@ -48,6 +48,7 @@ function DiffView({ workspacePath, file, reloadKey }: { workspacePath: string; f
 
   return (
     <div className="git-insights-diff select-text">
+      {error && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
       <table>
         <tbody>
           {lines.map((line, i) => (
@@ -85,12 +86,12 @@ function FileRow({ host, workspacePath, file, expanded, onToggle, reloadKey }: R
       <div className="git-insights-change-row">
         <button
           type="button"
-          className="git-insights-icon-button git-insights-chevron"
+          className="git-insights-icon-button"
           aria-expanded={expanded}
           aria-label={expanded ? 'Hide diff' : 'Show diff'}
           onClick={onToggle}
         >
-          {expanded ? '▾' : '▸'}
+          <MaterialSymbol icon={expanded ? 'expand_more' : 'chevron_right'} size={16} />
         </button>
         <span className={`git-insights-badge git-insights-badge--${file.status}`} title={badge.label}>{badge.letter}</span>
         {file.staged && <span className="git-insights-staged-dot" title={file.unstaged ? 'Partially staged' : 'Staged'} />}
@@ -108,7 +109,7 @@ function FileRow({ host, workspacePath, file, expanded, onToggle, reloadKey }: R
         <LineCounts added={file.added} deleted={file.deleted} />
         <span className="git-insights-change-sessions">
           {sessions.length === 0 ? (
-            <span className="git-insights-muted">manual</span>
+            <span className="git-insights-muted">No AI session</span>
           ) : (
             sessions.map((s) => (
               <span
@@ -132,9 +133,16 @@ export function UncommittedFilesTab({ host, workspacePath, reloadKey }: { host: 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { data, error } = useBackendTool<{ files: WorkingChange[] }>('get_working_changes', { repoPath: workspacePath }, reloadKey);
 
-  if (error) return <div className="git-insights-error select-text">{error}</div>;
+  if (error && !data) return <div className="git-insights-error select-text">{error}</div>;
   if (!data) return <div className="git-insights-loading">Loading changes…</div>;
-  if (data.files.length === 0) return <div className="git-insights-muted">Working tree clean. No uncommitted changes.</div>;
+  if (data.files.length === 0) {
+    return (
+      <>
+        {error && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
+        <div className="git-insights-muted">Working tree clean. No uncommitted changes.</div>
+      </>
+    );
+  }
 
   const files = data.files;
   const added = files.reduce((sum, f) => sum + (f.added ?? 0), 0);
@@ -149,6 +157,7 @@ export function UncommittedFilesTab({ host, workspacePath, reloadKey }: { host: 
 
   return (
     <div className="git-insights-uncommitted">
+      {error && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
       <div className="git-insights-uncommitted-toolbar">
         <span className="git-insights-summary-stats">
           <span><strong>{files.length}</strong> file{files.length === 1 ? '' : 's'}</span>
@@ -158,7 +167,7 @@ export function UncommittedFilesTab({ host, workspacePath, reloadKey }: { host: 
         <span className="git-insights-uncommitted-actions">
           <button
             type="button"
-            className="git-insights-granularity-button"
+            className="git-insights-button"
             onClick={() => setExpanded(allExpanded ? new Set() : new Set(files.map((f) => f.path)))}
           >
             {allExpanded ? 'Collapse all' : 'Expand all'}
