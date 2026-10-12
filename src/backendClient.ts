@@ -18,7 +18,20 @@ export async function callBackendTool<T>(toolName: string, args?: Record<string,
   if (!aiService) {
     throw new Error('Git Insights: the backend module is not available yet. Reopen the panel and try again.');
   }
-  return aiService.callBackendTool(`git-insights.${toolName}`, args) as Promise<T>;
+  try {
+    return (await aiService.callBackendTool(`git-insights.${toolName}`, args)) as T;
+  } catch (err) {
+    // The host only registers our tools once the backend module is running for
+    // this workspace. It stays parked if the workspace was untrusted when it
+    // opened (trusting it later doesn't restart the module) or consent was declined.
+    if (err instanceof Error && err.message.includes('Backend tool not available')) {
+      throw new Error(
+        'Git Insights backend is not running in this workspace. Make sure the workspace is trusted and the ' +
+          'Git Insights backend is enabled in Settings → Extensions, then reopen the project window.',
+      );
+    }
+    throw err;
+  }
 }
 
 /**
