@@ -16,7 +16,7 @@
       {
         "id": "git-insights",
         "title": "Git Insights",
-        "icon": "insights",
+        "icon": "commit",
         "placement": "bottom",
         "order": 65,
         "tooltip": "Commit heatmap, distribution charts, one-click PR/MR, and AI session attribution for uncommitted files."
