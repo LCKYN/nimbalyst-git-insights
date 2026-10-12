@@ -47,6 +47,14 @@
   white-space: nowrap;
 }
 
+.git-insights-sync {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nim-warning);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .git-insights-tab {
   background: transparent;
   border: none;

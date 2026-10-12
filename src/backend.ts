@@ -168,13 +168,17 @@ export async function activate(ctx: ActivateCtx) {
 
       get_branches: async (params: { repoPath?: string }) => {
         const cwd = params?.repoPath || workspacePath;
-        const [refs, current] = await Promise.all([
+        const [refs, current, counts] = await Promise.all([
           runGit(cwd, ['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes']),
           runGit(cwd, ['branch', '--show-current']),
+          // Fails with no upstream (or detached HEAD): no counts to show then.
+          runGit(cwd, ['rev-list', '--left-right', '--count', 'HEAD...@{u}']).catch(() => null),
         ]);
         const names = refs.split('\n').filter((ref) => ref && !ref.endsWith('/HEAD'));
+        const [ahead, behind] = counts?.trim().split(/\s+/).map(Number) ?? [];
         return {
           current: current.trim(),
+          upstream: counts ? { ahead, behind } : null,
           local: names.filter((ref) => ref.startsWith('refs/heads/')).map((ref) => ref.slice('refs/heads/'.length)),
           remote: names.filter((ref) => ref.startsWith('refs/remotes/')).map((ref) => ref.slice('refs/remotes/'.length)),
         };

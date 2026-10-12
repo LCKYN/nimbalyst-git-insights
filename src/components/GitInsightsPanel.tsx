@@ -46,6 +46,8 @@ function sinceFor(range: RangeId): string | undefined {
 
 export interface Branches {
   current: string;
+  /** Commits vs. the upstream branch; null when there is no upstream. */
+  upstream: { ahead: number; behind: number } | null;
   local: string[];
   remote: string[];
 }
@@ -110,6 +112,14 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
           <span className="git-insights-branch select-text" title="Current branch">
             <span aria-hidden="true"><MaterialSymbol icon="call_split" size={16} /></span>
             <span className="git-insights-branch-name">{branches.current || 'detached HEAD'}</span>
+          </span>
+        )}
+        {branches?.upstream && (branches.upstream.ahead > 0 || branches.upstream.behind > 0) && (
+          <span
+            className="git-insights-sync"
+            title={`${branches.upstream.ahead} to push, ${branches.upstream.behind} to pull`}
+          >
+            {branches.upstream.ahead > 0 && `↑${branches.upstream.ahead}`} {branches.upstream.behind > 0 && `↓${branches.upstream.behind}`}
           </span>
         )}
         <div className="git-insights-tabs" role="tablist" aria-label="Git Insights views" onKeyDown={onTabKeyDown}>
