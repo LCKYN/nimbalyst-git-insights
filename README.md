@@ -10,6 +10,10 @@ Branch lanes with ref badges (branches, tags, worktrees), a commit detail pane, 
 
 ![Graph tab](docs/screenshots/graph.png)
 
+Right-click a commit to copy its hash or message, check it out, branch or tag from it, cherry-pick, or revert.
+
+![Graph commit context menu](docs/screenshots/graph-context-menu.png)
+
 ### Summary
 
 Total commits, active days, busiest day and hour, a GitHub-style heatmap, and day-of-week / time-of-day charts.
