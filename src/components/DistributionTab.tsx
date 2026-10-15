@@ -39,6 +39,7 @@ export function DistributionTab({ workspacePath, filter, reloadKey }: { workspac
             <button
               key={option}
               type="button"
+              aria-pressed={option === granularity}
               className={option === granularity ? 'git-insights-segmented-button git-insights-segmented-button--active' : 'git-insights-segmented-button'}
               onClick={() => setPicked(option)}
             >

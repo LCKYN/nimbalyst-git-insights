@@ -167,6 +167,7 @@ export function GitInsightsPanel({ host }: PanelHostProps) {
                 <button
                   key={r.id}
                   type="button"
+                  aria-pressed={r.id === range}
                   className={r.id === range ? 'git-insights-segmented-button git-insights-segmented-button--active' : 'git-insights-segmented-button'}
                   onClick={() => setRange(r.id)}
                 >
