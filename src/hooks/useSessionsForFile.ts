@@ -77,7 +77,8 @@ export function useSessionsForFile(
   workspacePath: string,
   absoluteFilePath: string | null,
 ): State {
-  const [state, setState] = useState<State>(EMPTY);
+  // Start in loading so rows don't flash "No AI session" before the first lookup lands.
+  const [state, setState] = useState<State>(() => (absoluteFilePath ? { ...EMPTY, loading: true } : EMPTY));
   const requestRef = useRef(0);
 
   useEffect(() => {

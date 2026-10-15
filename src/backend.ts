@@ -152,6 +152,21 @@ export async function activate(ctx: ActivateCtx) {
     }
   }
 
+  /**
+   * Repo-writing actions run one at a time: a checkout during a pull, or a second
+   * push from Create PR, fails with a clear message instead of a git lock error.
+   */
+  let writing: string | null = null;
+  async function exclusive<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    if (writing) throw new Error(`Wait for the ${writing} to finish first.`);
+    writing = label;
+    try {
+      return await fn();
+    } finally {
+      writing = null;
+    }
+  }
+
   /** Resolves a repo-relative path from the renderer, refusing anything outside the repo. */
   function insideRepo(cwd: string, file: string): string {
     const abs = path.resolve(cwd, file);
@@ -221,21 +236,22 @@ export async function activate(ctx: ActivateCtx) {
         const cwd = params?.repoPath || workspacePath;
         const args = commitActionArgs(params?.action, params?.hash, params?.name);
         log('info', `[git-insights] git ${args.join(' ')}`);
-        const output = await runGit(cwd, args);
+        const output = await exclusive(params.action.replace('_', ' '), () => runGit(cwd, args));
         return { output: output.trim() };
       },
 
-      remote_action: async (params: { repoPath?: string; action: RemoteAction; strategy?: PullStrategy }) => {
-        const cwd = params?.repoPath || workspacePath;
-        let hasUpstream = false;
-        if (params?.action === 'push') {
-          hasUpstream = await runGit(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).then(() => true, () => false);
-        }
-        const args = remoteActionArgs(params?.action, { strategy: params?.strategy, hasUpstream });
-        log('info', `[git-insights] git ${args.join(' ')}`);
-        await runGit(cwd, args);
-        return { ok: true };
-      },
+      remote_action: (params: { repoPath?: string; action: RemoteAction; strategy?: PullStrategy }) =>
+        exclusive(params?.action ?? 'remote action', async () => {
+          const cwd = params?.repoPath || workspacePath;
+          let hasUpstream = false;
+          if (params?.action === 'push') {
+            hasUpstream = await runGit(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).then(() => true, () => false);
+          }
+          const args = remoteActionArgs(params?.action, { strategy: params?.strategy, hasUpstream });
+          log('info', `[git-insights] git ${args.join(' ')}`);
+          await runGit(cwd, args);
+          return { ok: true };
+        }),
 
       get_working_changes: async (params: { repoPath?: string }) => {
         const cwd = params?.repoPath || workspacePath;
@@ -297,7 +313,7 @@ export async function activate(ctx: ActivateCtx) {
           throw new Error('Could not detect GitHub or GitLab from the "origin" remote.');
         }
         log('info', `[git-insights] creating ${host === 'github' ? 'PR' : 'MR'} via ${host === 'github' ? 'gh' : 'glab'}`);
-        return createPullRequest(host, cwd);
+        return exclusive(host === 'github' ? 'pull request' : 'merge request', () => createPullRequest(host, cwd));
       },
     },
   };

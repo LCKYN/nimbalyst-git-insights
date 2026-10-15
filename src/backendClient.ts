@@ -34,14 +34,35 @@ export async function callBackendTool<T>(toolName: string, args?: Record<string,
   }
 }
 
+const inFlight = new Map<string, { running: Promise<unknown>; next?: Promise<unknown> }>();
+
 /**
- * Calls a backend tool whenever `args` (compared by value) or `reloadKey` change.
+ * Like `callBackendTool`, but at most one identical call (tool + args) runs at a time.
+ * Calls made while one is running share a single rerun that starts when it settles,
+ * so a burst of reloads during a slow `git log` costs two runs, not one per reload.
+ */
+export function callBackendToolCoalesced<T>(toolName: string, args: Record<string, unknown>): Promise<T> {
+  const key = `${toolName} ${JSON.stringify(args)}`;
+  const entry = inFlight.get(key);
+  if (entry) {
+    entry.next ??= entry.running.catch(() => {}).then(() => callBackendToolCoalesced(toolName, args));
+    return entry.next as Promise<T>;
+  }
+  const running = callBackendTool<T>(toolName, args).finally(() => {
+    if (inFlight.get(key)?.running === running) inFlight.delete(key);
+  });
+  inFlight.set(key, { running });
+  return running;
+}
+
+/**
+ * Calls a backend tool whenever `args` (compared by value) or `reloadKey` (any value) change.
  * Keeps the previous `data` while a reload is in flight so filters don't flash.
  * On error, keeps `data` if it came from the same args (a failed reload), so
  * views can show the error above the last good result; drops it if the args
  * changed, since data for a different filter would be wrong.
  */
-export function useBackendTool<T>(toolName: string, args: Record<string, unknown>, reloadKey = 0) {
+export function useBackendTool<T>(toolName: string, args: Record<string, unknown>, reloadKey: unknown = 0) {
   const argsKey = JSON.stringify(args);
   const [state, setState] = useState<{ data: T | null; dataKey: string | null; error: string | null; loading: boolean }>({
     data: null,
@@ -53,7 +74,7 @@ export function useBackendTool<T>(toolName: string, args: Record<string, unknown
   useEffect(() => {
     let cancelled = false;
     setState((prev) => ({ ...prev, error: null, loading: true }));
-    callBackendTool<T>(toolName, JSON.parse(argsKey))
+    callBackendToolCoalesced<T>(toolName, JSON.parse(argsKey))
       .then((data) => { if (!cancelled) setState({ data, dataKey: argsKey, error: null, loading: false }); })
       .catch((err) => {
         if (cancelled) return;

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { copyToClipboard, MaterialSymbol, type PanelHost } from '@nimbalyst/extension-sdk';
 import { callBackendTool, useBackendTool } from '../backendClient';
@@ -79,6 +79,10 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
     }
   };
 
+  // Up to 2000 rows: build the SVG and date labels once per fetch, not on every keystroke or selection.
+  const svg = useMemo(() => graph && <GraphSvg graph={graph} />, [graph]);
+  const dates = useMemo(() => new Map(graph?.rows.map((row) => [row.commit.hash, relativeDate(row.commit.authorDate)])), [graph]);
+
   if (error && !graph) {
     return <div className="git-insights-error select-text">{error}</div>;
   }
@@ -146,7 +150,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
         </div>
         {error && <div className="git-insights-error git-insights-error--stale select-text" title={error}>Couldn't refresh: {error}</div>}
         {status && (
-          <div className={status.error ? 'git-insights-error git-insights-status select-text' : 'git-insights-muted git-insights-status select-text'}>
+          <div className={status.error ? 'git-insights-error git-insights-status select-text' : 'git-insights-muted git-insights-status select-text'} role="status">
             {status.text}
             <button type="button" className="git-insights-icon-button" aria-label="Dismiss" onClick={() => setStatus(null)}>
               <MaterialSymbol icon="close" size={16} />
@@ -158,43 +162,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
           <div className="git-insights-muted">No loaded commits match “{query.trim()}”.</div>
         )}
         <div className="git-insights-graph">
-          {!searching && <svg
-            className="git-insights-graph-svg"
-            width={graphWidth}
-            height={graph.rows.length * ROW_HEIGHT}
-            role="img"
-            aria-label="Commit graph"
-          >
-            {graph.rows.flatMap((row, i) =>
-              row.segments.map((seg, j) => {
-                const x1 = laneX(seg.fromLane);
-                const x2 = laneX(seg.toLane);
-                const y1 = rowY(i - 1);
-                const y2 = rowY(i);
-                const yMid = (y1 + y2) / 2;
-                return (
-                  <path
-                    key={`${i}-${j}`}
-                    d={x1 === x2 ? `M${x1} ${y1}V${y2}` : `M${x1} ${y1}C${x1} ${yMid} ${x2} ${yMid} ${x2} ${y2}`}
-                    stroke={laneColor(seg.color)}
-                    strokeWidth={2}
-                    fill="none"
-                  />
-                );
-              })
-            )}
-            {graph.rows.map((row, i) => (
-              <circle
-                key={row.commit.hash}
-                cx={laneX(row.lane)}
-                cy={rowY(i)}
-                r={DOT_RADIUS}
-                fill={row.commit.refs.some((ref) => ref.startsWith('HEAD')) ? 'var(--nim-bg)' : laneColor(row.lane)}
-                stroke={laneColor(row.lane)}
-                strokeWidth={2}
-              />
-            ))}
-          </svg>}
+          {!searching && svg}
 
           <ol
             ref={listRef}
@@ -234,7 +202,7 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
                 <span className="git-insights-graph-subject" title={row.commit.subject}>{row.commit.subject}</span>
                 <span className="git-insights-graph-meta">{row.commit.author}</span>
                 <span className="git-insights-graph-meta">{row.commit.hash.slice(0, 7)}</span>
-                <span className="git-insights-graph-meta" title={row.commit.authorDate}>{relativeDate(row.commit.authorDate)}</span>
+                <span className="git-insights-graph-meta" title={row.commit.authorDate}>{dates.get(row.commit.hash)}</span>
               </li>
             ))}
           </ol>
@@ -267,6 +235,48 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
         />
       )}
     </div>
+  );
+}
+
+function GraphSvg({ graph }: { graph: CommitGraph }) {
+  return (
+    <svg
+      className="git-insights-graph-svg"
+      width={Math.max(1, graph.laneCount) * LANE_WIDTH}
+      height={graph.rows.length * ROW_HEIGHT}
+      role="img"
+      aria-label="Commit graph"
+    >
+      {graph.rows.flatMap((row, i) =>
+        row.segments.map((seg, j) => {
+          const x1 = laneX(seg.fromLane);
+          const x2 = laneX(seg.toLane);
+          const y1 = rowY(i - 1);
+          const y2 = rowY(i);
+          const yMid = (y1 + y2) / 2;
+          return (
+            <path
+              key={`${i}-${j}`}
+              d={x1 === x2 ? `M${x1} ${y1}V${y2}` : `M${x1} ${y1}C${x1} ${yMid} ${x2} ${yMid} ${x2} ${y2}`}
+              stroke={laneColor(seg.color)}
+              strokeWidth={2}
+              fill="none"
+            />
+          );
+        })
+      )}
+      {graph.rows.map((row, i) => (
+        <circle
+          key={row.commit.hash}
+          cx={laneX(row.lane)}
+          cy={rowY(i)}
+          r={DOT_RADIUS}
+          fill={row.commit.refs.some((ref) => ref.startsWith('HEAD')) ? 'var(--nim-bg)' : laneColor(row.lane)}
+          stroke={laneColor(row.lane)}
+          strokeWidth={2}
+        />
+      ))}
+    </svg>
   );
 }
 

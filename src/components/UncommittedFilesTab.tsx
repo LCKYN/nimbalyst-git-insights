@@ -33,11 +33,14 @@ function LineCounts({ added, deleted }: { added: number | null; deleted: number 
   );
 }
 
-function DiffView({ workspacePath, file, reloadKey }: { workspacePath: string; file: WorkingChange; reloadKey: number }) {
+function DiffView({ workspacePath, file }: { workspacePath: string; file: WorkingChange }) {
+  // Refetch when the file's change stats move, not on every panel reload: with "Expand all"
+  // that would be a git diff per open file per refresh.
+  // ponytail: an edit that keeps the same +/− counts shows the old diff until re-expanded.
   const { data, error } = useBackendTool<{ diff: string; truncated: boolean }>(
     'get_file_diff',
     { repoPath: workspacePath, path: file.path, oldPath: file.oldPath, untracked: file.status === 'untracked' },
-    reloadKey,
+    `${file.status} ${file.added} ${file.deleted}`,
   );
 
   if (error && !data) return <div className="git-insights-error select-text">{error}</div>;
@@ -72,12 +75,11 @@ interface RowProps {
   file: WorkingChange;
   expanded: boolean;
   onToggle: () => void;
-  reloadKey: number;
 }
 
-function FileRow({ host, workspacePath, file, expanded, onToggle, reloadKey }: RowProps) {
+function FileRow({ host, workspacePath, file, expanded, onToggle }: RowProps) {
   const absolutePath = joinPath(workspacePath, file.path);
-  const { data: sessions } = useSessionsForFile(workspacePath, absolutePath);
+  const { data: sessions, loading: sessionsLoading } = useSessionsForFile(workspacePath, absolutePath);
   const slash = file.path.lastIndexOf('/');
   const badge = BADGE[file.status];
 
@@ -109,7 +111,7 @@ function FileRow({ host, workspacePath, file, expanded, onToggle, reloadKey }: R
         <LineCounts added={file.added} deleted={file.deleted} />
         <span className="git-insights-change-sessions">
           {sessions.length === 0 ? (
-            <span className="git-insights-muted">No AI session</span>
+            !sessionsLoading && <span className="git-insights-muted">No AI session</span>
           ) : (
             sessions.map((s) => (
               <span
@@ -123,7 +125,7 @@ function FileRow({ host, workspacePath, file, expanded, onToggle, reloadKey }: R
           )}
         </span>
       </div>
-      {expanded && <DiffView workspacePath={workspacePath} file={file} reloadKey={reloadKey} />}
+      {expanded && <DiffView workspacePath={workspacePath} file={file} />}
     </li>
   );
 }
@@ -190,7 +192,6 @@ export function UncommittedFilesTab({ host, workspacePath, reloadKey }: { host: 
                   file={file}
                   expanded={expanded.has(file.path)}
                   onToggle={() => toggle(file.path)}
-                  reloadKey={reloadKey}
                 />
               ))}
             </ul>
