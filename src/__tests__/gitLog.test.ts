@@ -37,12 +37,16 @@ describe('commitActionArgs', () => {
     expect(commitActionArgs('create_tag', hash, 'v1')).toEqual(['tag', 'v1', hash]);
     expect(commitActionArgs('cherry_pick', hash)).toEqual(['cherry-pick', hash]);
     expect(commitActionArgs('revert', hash)).toEqual(['revert', '--no-edit', hash]);
+    expect(commitActionArgs('merge', hash, 'origin/dev')).toEqual(['merge', '--no-edit', 'origin/dev']);
+    expect(commitActionArgs('merge', hash)).toEqual(['merge', '--no-edit', hash]);
+    expect(commitActionArgs('rebase', hash, 'dev')).toEqual(['rebase', 'dev']);
   });
 
   it('rejects names and hashes git would read as options', () => {
     expect(() => commitActionArgs('create_branch', hash, '--output=/tmp/x')).toThrow();
     expect(() => commitActionArgs('create_tag', hash, '')).toThrow();
     expect(() => commitActionArgs('cherry_pick', '--abort')).toThrow();
+    expect(() => commitActionArgs('rebase', hash, '--onto=x')).toThrow();
   });
 });
 

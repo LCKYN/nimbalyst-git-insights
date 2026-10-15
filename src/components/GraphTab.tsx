@@ -230,6 +230,8 @@ export function GraphTab({ host, workspacePath, filter, branches, reloadKey, onR
           y={menu.y}
           commit={menu.commit}
           localBranches={branches?.local ?? []}
+          remoteBranches={branches?.remote ?? []}
+          currentBranch={branches?.current ?? ''}
           onAction={(action, name) => runAction(menu.commit, action, name)}
           onClose={closeMenu}
         />
@@ -284,6 +286,8 @@ function GraphSvg({ graph }: { graph: CommitGraph }) {
 const CONFIRM: Partial<Record<CommitAction, string>> = {
   cherry_pick: 'Cherry-pick',
   revert: 'Revert',
+  merge: 'Merge',
+  rebase: 'Rebase the current branch onto',
 };
 
 const ACTION_DONE: Record<CommitAction, string> = {
@@ -292,6 +296,8 @@ const ACTION_DONE: Record<CommitAction, string> = {
   create_tag: 'Created tag',
   cherry_pick: 'Cherry-picked',
   revert: 'Reverted',
+  merge: 'Merged',
+  rebase: 'Rebased onto',
 };
 
 interface MenuProps {
@@ -299,12 +305,15 @@ interface MenuProps {
   y: number;
   commit: GraphCommit;
   localBranches: string[];
+  remoteBranches: string[];
+  /** Empty when HEAD is detached. */
+  currentBranch: string;
   onAction: (action: CommitAction, name?: string) => void;
   onClose: (refocus: boolean) => void;
 }
 
 /** Right-click menu for a graph row. Portaled to <body> for the same reason as the tooltip. */
-function CommitMenu({ x, y, commit, localBranches, onAction, onClose }: MenuProps) {
+function CommitMenu({ x, y, commit, localBranches, remoteBranches, currentBranch, onAction, onClose }: MenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
   const [naming, setNaming] = useState<'create_branch' | 'create_tag' | null>(null);
@@ -352,6 +361,10 @@ function CommitMenu({ x, y, commit, localBranches, onAction, onClose }: MenuProp
   const branchesHere = commit.refs
     .map((r) => r.replace(/^HEAD -> /, ''))
     .filter((r) => localBranches.includes(r));
+  // Merge/rebase only make sense against another branch's tip; prefer a branch name over the bare hash.
+  const isCurrentTip = commit.refs.some((r) => r.startsWith('HEAD'));
+  const otherBranch = [...branchesHere, ...commit.refs.filter((r) => remoteBranches.includes(r))].find((b) => b !== currentBranch);
+  const target = otherBranch ?? commit.hash.slice(0, 7);
   const item = (label: string, onClick: () => void) => (
     <button key={label} type="button" role="menuitem" className="git-insights-menu-item" onClick={onClick}>{label}</button>
   );
@@ -385,6 +398,13 @@ function CommitMenu({ x, y, commit, localBranches, onAction, onClose }: MenuProp
           <hr />
           {item('Cherry-pick onto current branch', () => onAction('cherry_pick'))}
           {item('Revert commit', () => onAction('revert'))}
+          {currentBranch && !isCurrentTip && (
+            <>
+              <hr />
+              {item(`Merge ${target} into ${currentBranch}`, () => onAction('merge', otherBranch))}
+              {item(`Rebase ${currentBranch} onto ${target}`, () => onAction('rebase', otherBranch))}
+            </>
+          )}
         </>
       )}
     </div>,

@@ -80,13 +80,13 @@ const TOOL_DESCRIPTORS = [
   },
   {
     name: 'commit_action',
-    description: 'Run a git operation on a commit: checkout, create_branch, create_tag, cherry_pick, or revert.',
+    description: 'Run a git operation on a commit: checkout, create_branch, create_tag, cherry_pick, revert, merge (into the current branch), or rebase (the current branch onto it).',
     inputSchema: {
       type: 'object',
       properties: {
         repoPath: { type: 'string' },
         hash: { type: 'string' },
-        action: { type: 'string', enum: ['checkout', 'create_branch', 'create_tag', 'cherry_pick', 'revert'] },
+        action: { type: 'string', enum: ['checkout', 'create_branch', 'create_tag', 'cherry_pick', 'revert', 'merge', 'rebase'] },
         name: { type: 'string' },
       },
       required: ['hash', 'action'],

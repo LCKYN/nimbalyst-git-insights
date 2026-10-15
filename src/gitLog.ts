@@ -39,9 +39,12 @@ export function assertHash(value: string): string {
   return value;
 }
 
-export type CommitAction = 'checkout' | 'create_branch' | 'create_tag' | 'cherry_pick' | 'revert';
+export type CommitAction = 'checkout' | 'create_branch' | 'create_tag' | 'cherry_pick' | 'revert' | 'merge' | 'rebase';
 
-/** git argv for a graph context-menu action. `name` is the branch to check out / branch or tag to create. */
+/**
+ * git argv for a graph context-menu action. `name` is the branch to check out / branch or tag to create,
+ * or the branch to merge / rebase onto (the commit itself when omitted).
+ */
 export function commitActionArgs(action: CommitAction, hash: string, name?: string): string[] {
   assertHash(hash);
   switch (action) {
@@ -55,6 +58,10 @@ export function commitActionArgs(action: CommitAction, hash: string, name?: stri
       return ['cherry-pick', hash];
     case 'revert':
       return ['revert', '--no-edit', hash];
+    case 'merge':
+      return ['merge', '--no-edit', name ? assertRef(name) : hash];
+    case 'rebase':
+      return ['rebase', name ? assertRef(name) : hash];
     default:
       throw new Error(`Unknown commit action: ${String(action)}`);
   }
